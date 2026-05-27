@@ -30,7 +30,7 @@ function MetadataField({ label, value, onChange }: MetadataFieldProps) {
 }
 export default function MetadataPane() {
   return (
-    <div className="flex flex-col gap-3 p-3 overflow-y-auto">
+    <div className="flex flex-col gap-3 p-3 overflow-y-auto h-full w-full">
       <MetadataField label="Title" />
       <MetadataField label="Artist" />
       <MetadataField label="Album" />
