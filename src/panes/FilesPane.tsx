@@ -27,7 +27,7 @@ export default function FilesPane({ tracks }: FilesPaneProps) {
               className="grid grid-cols-4 px-3 py-1 text-sm border-b hover:bg-muted cursor-pointer"
             >
               <span className="truncate">{track.title ?? "Unknown"}</span>
-              <span className="truncate">{track.artist ?? "Unknown"}</span>
+              <span className="truncate">{track.artists.join(", ")}</span>
               <span className="truncate">{track.album ?? "Unknown"}</span>
               <span className="truncate">{track.year ?? ""}</span>
             </div>
