@@ -2,8 +2,14 @@ import { Track } from "@/types/track";
 
 interface FilesPaneProps {
   tracks: Track[];
+  onSelect: (track: Track) => void;
+  selectedTrack: Track | null;
 }
-export default function FilesPane({ tracks }: FilesPaneProps) {
+export default function FilesPane({
+  tracks,
+  onSelect,
+  selectedTrack,
+}: FilesPaneProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Column Headers */}
@@ -24,10 +30,12 @@ export default function FilesPane({ tracks }: FilesPaneProps) {
           tracks.map((track) => (
             <div
               key={track.path}
-              className="grid grid-cols-4 px-3 py-1 text-sm border-b hover:bg-muted cursor-pointer"
+              onClick={() => onSelect(track)}
+              className={`grid grid-cols-4 px-3 py-1 text-sm border-b cursor-pointer
+                ${selectedTrack?.path === track.path ? "bg-accent" : "hover:bg-muted"}`}
             >
               <span className="truncate">{track.title ?? "Unknown"}</span>
-              <span className="truncate">{track.artists.join(", ")}</span>
+              <span className="truncate">{track.artists.join("\\\\")}</span>
               <span className="truncate">{track.album ?? "Unknown"}</span>
               <span className="truncate">{track.year ?? ""}</span>
             </div>

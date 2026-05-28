@@ -1,3 +1,5 @@
+use base64::{engine::general_purpose::STANDARD, Engine};
+use lofty::picture::PictureType;
 use lofty::prelude::*;
 use lofty::probe::Probe;
 use serde::{Deserialize, Serialize};
@@ -24,6 +26,28 @@ fn get_year(tag: &lofty::tag::Tag) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+fn get_comment(tag: &lofty::tag::Tag) -> Option<String> {
+    tag.get_string(ItemKey::Comment)
+        .or_else(|| tag.get_string(ItemKey::Description))
+        .map(|s| s.to_string())
+}
+
+pub fn get_album_art(path: &str) -> Option<String> {
+    let tagged_file = Probe::open(path).ok()?.read().ok()?;
+    let tag = tagged_file.primary_tag()?;
+
+    let picture = tag
+        .pictures()
+        .iter()
+        .find(|p| p.pic_type() == PictureType::CoverFront)
+        .or_else(|| tag.pictures().first())?;
+
+    let mime = picture.mime_type()?.as_str();
+    let b64 = STANDARD.encode(picture.data());
+
+    Some(format!("data:{};base64,{}", mime, b64))
+}
+
 pub fn read_track(path: &str) -> Option<TrackMetadata> {
     let tagged_file = Probe::open(path).ok()?.read().ok()?;
     let tag = tagged_file.primary_tag();
@@ -41,7 +65,7 @@ pub fn read_track(path: &str) -> Option<TrackMetadata> {
         album: tag.and_then(|t| t.album().map(|s| s.to_string())),
         album_artists: tag
             .map(|t| {
-                t.get_strings(ItemKey::AlbumArtists)
+                t.get_strings(ItemKey::AlbumArtist)
                     .map(|s| s.to_string())
                     .collect()
             })
@@ -50,6 +74,6 @@ pub fn read_track(path: &str) -> Option<TrackMetadata> {
         track_number: tag.and_then(|t| t.get_string(ItemKey::TrackNumber).map(|s| s.to_string())),
         disc_number: tag.and_then(|t| t.get_string(ItemKey::DiscNumber).map(|s| s.to_string())),
         genre: tag.and_then(|t| t.genre().map(|s| s.to_string())),
-        comment: tag.and_then(|t| t.get_string(ItemKey::Comment).map(|s| s.to_string())),
+        comment: tag.and_then(get_comment),
     })
 }
