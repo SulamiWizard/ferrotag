@@ -2,6 +2,7 @@ import FilesPane from "./panes/FilesPane";
 import MetadataPane from "./panes/MetadataPane";
 import "./App.css";
 import { Track } from "@/types/track";
+import { saveTrack } from "@/lib/tauri";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -35,6 +36,29 @@ function App() {
     setAlbumArt(art);
   };
 
+  const handleDeselect = () => {
+    setSelectedTrack(null);
+    setEdits({});
+    setAlbumArt(null);
+  };
+
+  const handleSave = async () => {
+    if (!selectedTrack) return;
+    await saveTrack(selectedTrack.path, edits);
+    const parseArtists = (v: unknown): string[] =>
+      typeof v === "string"
+        ? v.split("\\\\").map((a) => a.trim()).filter(Boolean)
+        : (v as string[]);
+    const parsedEdits = {
+      ...edits,
+      ...(edits.artists !== undefined && { artists: parseArtists(edits.artists) }),
+      ...(edits.album_artists !== undefined && { album_artists: parseArtists(edits.album_artists) }),
+    };
+    setTracks((prev) =>
+      prev.map((t) => (t.path === selectedTrack.path ? { ...t, ...parsedEdits } : t)),
+    );
+  };
+
   useEffect(() => {
     const unlisten = listen<DragDropPayload>(
       "tauri://drag-drop",
@@ -49,14 +73,30 @@ function App() {
       unlisten.then((f) => f());
     };
   }, []);
+  const hasEdits = Object.keys(edits).length > 0;
+
   return (
     <ResizablePanelGroup orientation="horizontal" className="h-screen w-screen">
       <ResizablePanel defaultSize="50%" minSize="15%" maxSize="75%">
-        <MetadataPane
-          track={selectedTrack}
-          albumArt={albumArt}
-          onEdit={handleEdit}
-        />
+        <div className="flex flex-col h-full">
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <MetadataPane
+              track={selectedTrack}
+              albumArt={albumArt}
+              onEdit={handleEdit}
+            />
+          </div>
+          <div className="border-t p-2">
+            <button
+              onClick={handleSave}
+              disabled={!selectedTrack || !hasEdits}
+              className="w-full h-8 text-sm rounded-md bg-primary text-primary-foreground
+                hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+            >
+              Save
+            </button>
+          </div>
+        </div>
       </ResizablePanel>
 
       <ResizableHandle />
@@ -66,6 +106,7 @@ function App() {
           tracks={tracks}
           selectedTrack={selectedTrack}
           onSelect={handleSelect}
+          onDeselect={handleDeselect}
         />
       </ResizablePanel>
     </ResizablePanelGroup>

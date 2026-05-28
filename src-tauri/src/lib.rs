@@ -44,6 +44,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::scan::load_tracks,
             commands::art::load_album_art,
+            commands::tags::save_track,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
