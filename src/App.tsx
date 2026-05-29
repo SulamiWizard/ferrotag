@@ -19,32 +19,46 @@ interface DragDropPayload {
 
 function App() {
   const [tracks, setTracks] = useState<Track[]>([]);
-  const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
+  const [selectedTracks, setSelectedTracks] = useState<Track[]>([]);
   const [edits, setEdits] = useState<Partial<Track>>({});
   const [albumArt, setAlbumArt] = useState<string | null>(null);
 
-  const handleEdit = (field: keyof Track, value: string) => {
-    setEdits((prev) => ({ ...prev, [field]: value }));
+  const handleEdit = (field: keyof Track, value: string | undefined) => {
+    if (value === undefined) {
+      setEdits((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    } else {
+      setEdits((prev) => ({ ...prev, [field]: value }));
+    }
   };
 
-  const handleSelect = async (track: Track) => {
-    setSelectedTrack(track);
+  const handleSelect = async (newTracks: Track[]) => {
+    setSelectedTracks(newTracks);
     setEdits({});
-    const art = await invoke<string | null>("load_album_art", {
-      path: track.path,
-    });
-    setAlbumArt(art);
+    if (newTracks.length === 0) {
+      setAlbumArt(null);
+      return;
+    }
+    const arts = await Promise.all(
+      newTracks.map((t) =>
+        invoke<string | null>("load_album_art", { path: t.path }),
+      ),
+    );
+    const first = arts[0];
+    setAlbumArt(arts.every((a) => a === first) ? first : null);
   };
 
   const handleDeselect = () => {
-    setSelectedTrack(null);
+    setSelectedTracks([]);
     setEdits({});
     setAlbumArt(null);
   };
 
   const handleSave = async () => {
-    if (!selectedTrack) return;
-    await saveTrack(selectedTrack.path, edits);
+    if (selectedTracks.length === 0) return;
     const parseArtists = (v: unknown): string[] =>
       typeof v === "string"
         ? v
@@ -61,9 +75,14 @@ function App() {
         album_artists: parseArtists(edits.album_artists),
       }),
     };
+    for (const track of selectedTracks) {
+      await saveTrack(track.path, edits);
+    }
     setTracks((prev) =>
       prev.map((t) =>
-        t.path === selectedTrack.path ? { ...t, ...parsedEdits } : t,
+        selectedTracks.some((s) => s.path === t.path)
+          ? { ...t, ...parsedEdits }
+          : t,
       ),
     );
   };
@@ -73,18 +92,19 @@ function App() {
       if (tracks.length === 0) return;
       if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
       e.preventDefault();
-      const currentIndex = selectedTrack
-        ? tracks.findIndex((t) => t.path === selectedTrack.path)
+      const anchor = selectedTracks[selectedTracks.length - 1];
+      const currentIndex = anchor
+        ? tracks.findIndex((t) => t.path === anchor.path)
         : -1;
       const nextIndex =
         e.key === "ArrowDown"
           ? Math.min(currentIndex + 1, tracks.length - 1)
           : Math.max(currentIndex - 1, 0);
-      if (nextIndex !== currentIndex) handleSelect(tracks[nextIndex]);
+      if (nextIndex !== currentIndex) handleSelect([tracks[nextIndex]]);
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [tracks, selectedTrack]);
+  }, [tracks, selectedTracks]);
 
   useEffect(() => {
     const unlisten = listen<DragDropPayload>(
@@ -100,6 +120,7 @@ function App() {
       unlisten.then((f) => f());
     };
   }, []);
+
   const hasEdits = Object.keys(edits).length > 0;
 
   return (
@@ -108,7 +129,7 @@ function App() {
         <div className="flex flex-col h-full">
           <div className="flex-1 min-h-0 overflow-hidden">
             <MetadataPane
-              track={selectedTrack}
+              tracks={selectedTracks}
               albumArt={albumArt}
               onEdit={handleEdit}
             />
@@ -116,7 +137,7 @@ function App() {
           <div className="border-t border-border/50 p-3">
             <button
               onClick={handleSave}
-              disabled={!selectedTrack || !hasEdits}
+              disabled={selectedTracks.length === 0 || !hasEdits}
               className="w-full h-8 text-sm font-medium rounded-md bg-primary text-primary-foreground
                 hover:bg-primary/85 active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed
                 transition-all duration-100"
@@ -132,7 +153,7 @@ function App() {
       <ResizablePanel defaultSize="75%">
         <FilesPane
           tracks={tracks}
-          selectedTrack={selectedTrack}
+          selectedTracks={selectedTracks}
           onSelect={handleSelect}
           onDeselect={handleDeselect}
         />

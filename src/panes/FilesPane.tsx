@@ -1,22 +1,49 @@
+import { useRef } from "react";
 import { Track } from "@/types/track";
 
 interface FilesPaneProps {
   tracks: Track[];
-  onSelect: (track: Track) => void;
+  selectedTracks: Track[];
+  onSelect: (tracks: Track[]) => void;
   onDeselect: () => void;
-  selectedTrack: Track | null;
 }
+
 export default function FilesPane({
   tracks,
+  selectedTracks,
   onSelect,
   onDeselect,
-  selectedTrack,
 }: FilesPaneProps) {
-  const handleTrackClick = (track: Track) => {
-    if (selectedTrack?.path === track.path) {
-      onDeselect();
+  const lastClickedIndex = useRef<number>(-1);
+  const selectedPaths = new Set(selectedTracks.map((t) => t.path));
+
+  const handleTrackClick = (
+    track: Track,
+    index: number,
+    e: React.MouseEvent,
+  ) => {
+    e.stopPropagation();
+
+    if (e.ctrlKey || e.metaKey) {
+      if (selectedPaths.has(track.path)) {
+        onSelect(selectedTracks.filter((t) => t.path !== track.path));
+      } else {
+        onSelect([...selectedTracks, track]);
+      }
+      lastClickedIndex.current = index;
+    } else if (e.shiftKey && lastClickedIndex.current !== -1) {
+      const start = Math.min(lastClickedIndex.current, index);
+      const end = Math.max(lastClickedIndex.current, index);
+      onSelect(tracks.slice(start, end + 1));
     } else {
-      onSelect(track);
+      const isOnlySelected =
+        selectedTracks.length === 1 && selectedPaths.has(track.path);
+      if (isOnlySelected) {
+        onDeselect();
+      } else {
+        onSelect([track]);
+      }
+      lastClickedIndex.current = index;
     }
   };
 
@@ -37,21 +64,34 @@ export default function FilesPane({
             Drop audio files here
           </div>
         ) : (
-          tracks.map((track) => (
-            <div
-              key={track.path}
-              onClick={(e) => { e.stopPropagation(); handleTrackClick(track); }}
-              className={`grid grid-cols-4 px-4 py-2 text-sm border-b border-border/50 cursor-pointer transition-colors duration-100
-                ${selectedTrack?.path === track.path
-                  ? "bg-accent border-l-2 border-l-primary pl-[14px]"
-                  : "hover:bg-muted/60"}`}
-            >
-              <span className="truncate font-medium">{track.title ?? "Unknown"}</span>
-              <span className="truncate text-muted-foreground">{track.artists.join("\\\\")}</span>
-              <span className="truncate text-muted-foreground">{track.album ?? "Unknown"}</span>
-              <span className="truncate text-muted-foreground tabular-nums">{track.recording_date ?? track.year ?? ""}</span>
-            </div>
-          ))
+          tracks.map((track, index) => {
+            const isSelected = selectedPaths.has(track.path);
+            return (
+              <div
+                key={track.path}
+                onClick={(e) => handleTrackClick(track, index, e)}
+                className={`grid grid-cols-4 px-4 py-2 text-sm border-b border-border/50 cursor-pointer transition-colors duration-100
+                  ${
+                    isSelected
+                      ? "bg-accent border-l-2 border-l-primary pl-3.5"
+                      : "hover:bg-muted/60"
+                  }`}
+              >
+                <span className="truncate font-medium">
+                  {track.title ?? "Unknown"}
+                </span>
+                <span className="truncate text-muted-foreground">
+                  {track.artists.join("\\\\")}
+                </span>
+                <span className="truncate text-muted-foreground">
+                  {track.album ?? "Unknown"}
+                </span>
+                <span className="truncate text-muted-foreground tabular-nums">
+                  {track.recording_date ?? track.year ?? ""}
+                </span>
+              </div>
+            );
+          })
         )}
       </div>
     </div>
