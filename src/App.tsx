@@ -86,12 +86,13 @@ function App() {
               onEdit={handleEdit}
             />
           </div>
-          <div className="border-t p-2">
+          <div className="border-t border-border/50 p-3">
             <button
               onClick={handleSave}
               disabled={!selectedTrack || !hasEdits}
-              className="w-full h-8 text-sm rounded-md bg-primary text-primary-foreground
-                hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+              className="w-full h-8 text-sm font-medium rounded-md bg-primary text-primary-foreground
+                hover:bg-primary/85 active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed
+                transition-all duration-100"
             >
               Save
             </button>

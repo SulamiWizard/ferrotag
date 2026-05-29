@@ -192,15 +192,15 @@ export default function MetadataPane({
 
       <div className="flex flex-col gap-1">
         <Label className="text-xs text-muted-foreground">Album Art</Label>
-        <div className="w-full max-w-80 max-h-80 bg-muted rounded overflow-hidden flex items-center justify-center border">
+        <div className="w-full aspect-square max-w-60 bg-muted/50 rounded-lg overflow-hidden flex items-center justify-center border border-border/50">
           {albumArt ? (
             <img
               src={albumArt}
               alt="Album Art"
-              className="max-w-full max-h-80 object-contain"
+              className="w-full h-full object-cover"
             />
           ) : (
-            <span className="text-xs text-muted-foreground">No art</span>
+            <span className="text-xs text-muted-foreground/50 select-none">No art</span>
           )}
         </div>
       </div>
