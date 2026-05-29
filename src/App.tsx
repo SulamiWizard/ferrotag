@@ -11,6 +11,7 @@ import {
 
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
 
 interface DragDropPayload {
@@ -22,6 +23,7 @@ function App() {
   const [selectedTracks, setSelectedTracks] = useState<Track[]>([]);
   const [edits, setEdits] = useState<Partial<Track>>({});
   const [albumArt, setAlbumArt] = useState<string | null>(null);
+  const [pendingArtPath, setPendingArtPath] = useState<string | null>(null);
 
   const handleEdit = (field: keyof Track, value: string | undefined) => {
     if (value === undefined) {
@@ -38,6 +40,7 @@ function App() {
   const handleSelect = async (newTracks: Track[]) => {
     setSelectedTracks(newTracks);
     setEdits({});
+    setPendingArtPath(null);
     if (newTracks.length === 0) {
       setAlbumArt(null);
       return;
@@ -55,6 +58,7 @@ function App() {
     setSelectedTracks([]);
     setEdits({});
     setAlbumArt(null);
+    setPendingArtPath(null);
   };
 
   const handleSave = async () => {
@@ -78,6 +82,13 @@ function App() {
     for (const track of selectedTracks) {
       await saveTrack(track.path, edits);
     }
+    if (pendingArtPath) {
+      await invoke("set_album_art", {
+        audioPaths: selectedTracks.map((t) => t.path),
+        imagePath: pendingArtPath,
+      });
+      setPendingArtPath(null);
+    }
     setTracks((prev) =>
       prev.map((t) =>
         selectedTracks.some((s) => s.path === t.path)
@@ -85,6 +96,42 @@ function App() {
           : t,
       ),
     );
+  };
+
+  const handleArtClick = async () => {
+    if (selectedTracks.length === 0) return;
+    const selected = await open({
+      multiple: false,
+      filters: [
+        {
+          name: "Image",
+          extensions: ["jpg", "jpeg", "png", "gif", "webp", "bmp"],
+        },
+      ],
+    });
+    if (!selected || typeof selected !== "string") return;
+    const preview = await invoke<string | null>("read_image", {
+      path: selected,
+    });
+    if (preview) {
+      setAlbumArt(preview);
+      setPendingArtPath(selected);
+    }
+  };
+
+  const handleArtExtract = async () => {
+    if (!albumArt || selectedTracks.length === 0) return;
+    const destPath = await save({
+      defaultPath: "cover.jpg",
+      filters: [
+        { name: "Image", extensions: ["jpg", "jpeg", "png", "webp", "bmp"] },
+      ],
+    });
+    if (!destPath) return;
+    await invoke("extract_album_art", {
+      audioPath: selectedTracks[0].path,
+      destPath,
+    });
   };
 
   useEffect(() => {
@@ -121,7 +168,7 @@ function App() {
     };
   }, []);
 
-  const hasEdits = Object.keys(edits).length > 0;
+  const hasEdits = Object.keys(edits).length > 0 || pendingArtPath !== null;
 
   return (
     <ResizablePanelGroup orientation="horizontal" className="h-screen w-screen">
@@ -132,6 +179,8 @@ function App() {
               tracks={selectedTracks}
               albumArt={albumArt}
               onEdit={handleEdit}
+              onArtClick={handleArtClick}
+              onArtExtract={handleArtExtract}
             />
           </div>
           <div className="border-t border-border/50 p-3">

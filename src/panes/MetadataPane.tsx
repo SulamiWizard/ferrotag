@@ -8,6 +8,8 @@ interface MetadataPaneProps {
   tracks: Track[];
   albumArt: string | null;
   onEdit: (field: keyof Track, value: string | undefined) => void;
+  onArtClick: () => void;
+  onArtExtract: () => void;
 }
 
 // null = mixed values across selected tracks → show <keep> placeholder
@@ -179,7 +181,7 @@ function CollapsibleComboGroup({
   );
 }
 
-export default function MetadataPane({ tracks, albumArt, onEdit }: MetadataPaneProps) {
+export default function MetadataPane({ tracks, albumArt, onEdit, onArtClick, onArtExtract }: MetadataPaneProps) {
   const [fields, setFields] = useState(initialFields(tracks));
   const [originals, setOriginals] = useState(initialFields(tracks));
 
@@ -203,6 +205,19 @@ export default function MetadataPane({ tracks, albumArt, onEdit }: MetadataPaneP
     setFields((prev) => ({ ...prev, [field]: "" }));
     onEdit(field as keyof Track, "");
   };
+
+  const [artContextMenu, setArtContextMenu] = useState(false);
+  const artContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!artContextMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (!artContainerRef.current?.contains(e.target as Node))
+        setArtContextMenu(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [artContextMenu]);
 
   const firstTrack = tracks[0] ?? null;
 
@@ -322,11 +337,49 @@ export default function MetadataPane({ tracks, albumArt, onEdit }: MetadataPaneP
 
       <div className="flex flex-col gap-1">
         <Label className="text-xs text-muted-foreground">Album Art</Label>
-        <div className="w-full aspect-square max-w-60 bg-muted/50 rounded-lg overflow-hidden flex items-center justify-center border border-border/50">
-          {albumArt ? (
-            <img src={albumArt} alt="Album Art" className="w-full h-full object-cover" />
-          ) : (
-            <span className="text-xs text-muted-foreground/50 select-none">No art</span>
+        <div ref={artContainerRef} className="relative w-full max-w-60">
+          <div
+            onClick={tracks.length > 0 ? onArtClick : undefined}
+            onContextMenu={(e) => {
+              if (!albumArt) return;
+              e.preventDefault();
+              setArtContextMenu(true);
+            }}
+            className={`w-full aspect-square bg-muted/50 rounded-lg overflow-hidden flex items-center justify-center border border-border/50 group relative
+              ${tracks.length > 0 ? "cursor-pointer" : ""}`}
+          >
+            {albumArt ? (
+              <img src={albumArt} alt="Album Art" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-xs text-muted-foreground/50 select-none">
+                {tracks.length > 0 ? "Click to add art" : "No art"}
+              </span>
+            )}
+            {tracks.length > 0 && (
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <span className="text-white text-xs font-medium select-none">Change image</span>
+              </div>
+            )}
+          </div>
+          {artContextMenu && (
+            <div className="absolute top-2 left-2 z-50 bg-popover border border-border rounded-md shadow-md overflow-hidden">
+              <button
+                type="button"
+                className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors whitespace-nowrap"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { onArtExtract(); setArtContextMenu(false); }}
+              >
+                Extract image
+              </button>
+              <button
+                type="button"
+                className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors whitespace-nowrap"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { onArtClick(); setArtContextMenu(false); }}
+              >
+                Change image
+              </button>
+            </div>
           )}
         </div>
       </div>

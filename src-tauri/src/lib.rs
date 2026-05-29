@@ -41,9 +41,13 @@ pub fn run() {
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::scan::load_tracks,
             commands::art::load_album_art,
+            commands::art::read_image,
+            commands::art::set_album_art,
+            commands::art::extract_album_art,
             commands::tags::save_track,
         ])
         .run(tauri::generate_context!())
