@@ -49,7 +49,7 @@ export default function FilesPane({
               <span className="truncate font-medium">{track.title ?? "Unknown"}</span>
               <span className="truncate text-muted-foreground">{track.artists.join("\\\\")}</span>
               <span className="truncate text-muted-foreground">{track.album ?? "Unknown"}</span>
-              <span className="truncate text-muted-foreground tabular-nums">{track.year ?? ""}</span>
+              <span className="truncate text-muted-foreground tabular-nums">{track.recording_date ?? track.year ?? ""}</span>
             </div>
           ))
         )}

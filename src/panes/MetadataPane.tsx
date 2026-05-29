@@ -140,18 +140,18 @@ export default function MetadataPane({
 
       <CollapsibleMetadataGroup
         primaryLabel="Year"
-        primaryValue={fields.year}
-        onPrimaryChange={(v) => handleChange("year", v)}
+        primaryValue={fields.recording_date}
+        onPrimaryChange={(v) => handleChange("recording_date", v)}
       >
+        <MetadataField
+          label="Year (TYER)"
+          value={fields.year}
+          onChange={(v) => handleChange("year", v)}
+        />
         <MetadataField
           label="Release Date"
           value={fields.release_date}
           onChange={(v) => handleChange("release_date", v)}
-        />
-        <MetadataField
-          label="Recording Date"
-          value={fields.recording_date}
-          onChange={(v) => handleChange("recording_date", v)}
         />
         <MetadataField
           label="Original Release Date"

@@ -47,17 +47,44 @@ function App() {
     await saveTrack(selectedTrack.path, edits);
     const parseArtists = (v: unknown): string[] =>
       typeof v === "string"
-        ? v.split("\\\\").map((a) => a.trim()).filter(Boolean)
+        ? v
+            .split("\\\\")
+            .map((a) => a.trim())
+            .filter(Boolean)
         : (v as string[]);
     const parsedEdits = {
       ...edits,
-      ...(edits.artists !== undefined && { artists: parseArtists(edits.artists) }),
-      ...(edits.album_artists !== undefined && { album_artists: parseArtists(edits.album_artists) }),
+      ...(edits.artists !== undefined && {
+        artists: parseArtists(edits.artists),
+      }),
+      ...(edits.album_artists !== undefined && {
+        album_artists: parseArtists(edits.album_artists),
+      }),
     };
     setTracks((prev) =>
-      prev.map((t) => (t.path === selectedTrack.path ? { ...t, ...parsedEdits } : t)),
+      prev.map((t) =>
+        t.path === selectedTrack.path ? { ...t, ...parsedEdits } : t,
+      ),
     );
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (tracks.length === 0) return;
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+      e.preventDefault();
+      const currentIndex = selectedTrack
+        ? tracks.findIndex((t) => t.path === selectedTrack.path)
+        : -1;
+      const nextIndex =
+        e.key === "ArrowDown"
+          ? Math.min(currentIndex + 1, tracks.length - 1)
+          : Math.max(currentIndex - 1, 0);
+      if (nextIndex !== currentIndex) handleSelect(tracks[nextIndex]);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [tracks, selectedTrack]);
 
   useEffect(() => {
     const unlisten = listen<DragDropPayload>(
