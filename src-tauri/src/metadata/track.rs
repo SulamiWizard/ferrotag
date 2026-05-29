@@ -12,24 +12,14 @@ pub struct TrackMetadata {
     pub album: Option<String>,
     pub album_artists: Vec<String>,
     pub year: Option<String>,
+    pub release_date: Option<String>,
+    pub recording_date: Option<String>,
+    pub original_release_date: Option<String>,
     pub track_number: Option<String>,
     pub disc_number: Option<String>,
     pub genre: Option<String>,
     pub comment: Option<String>,
-}
-
-fn get_year(tag: &lofty::tag::Tag) -> Option<String> {
-    tag.get_string(ItemKey::Year)
-        .or_else(|| tag.get_string(ItemKey::ReleaseDate))
-        .or_else(|| tag.get_string(ItemKey::RecordingDate))
-        .or_else(|| tag.get_string(ItemKey::OriginalReleaseDate))
-        .map(|s| s.to_string())
-}
-
-fn get_comment(tag: &lofty::tag::Tag) -> Option<String> {
-    tag.get_string(ItemKey::Comment)
-        .or_else(|| tag.get_string(ItemKey::Description))
-        .map(|s| s.to_string())
+    pub description: Option<String>,
 }
 
 pub fn get_album_art(path: &str) -> Option<String> {
@@ -70,10 +60,14 @@ pub fn read_track(path: &str) -> Option<TrackMetadata> {
                     .collect()
             })
             .unwrap_or_default(),
-        year: tag.and_then(get_year),
+        year: tag.and_then(|t| t.get_string(ItemKey::Year).map(|s| s.to_string())),
+        release_date: tag.and_then(|t| t.get_string(ItemKey::ReleaseDate).map(|s| s.to_string())),
+        recording_date: tag.and_then(|t| t.get_string(ItemKey::RecordingDate).map(|s| s.to_string())),
+        original_release_date: tag.and_then(|t| t.get_string(ItemKey::OriginalReleaseDate).map(|s| s.to_string())),
         track_number: tag.and_then(|t| t.get_string(ItemKey::TrackNumber).map(|s| s.to_string())),
         disc_number: tag.and_then(|t| t.get_string(ItemKey::DiscNumber).map(|s| s.to_string())),
         genre: tag.and_then(|t| t.genre().map(|s| s.to_string())),
-        comment: tag.and_then(get_comment),
+        comment: tag.and_then(|t| t.get_string(ItemKey::Comment).map(|s| s.to_string())),
+        description: tag.and_then(|t| t.get_string(ItemKey::Description).map(|s| s.to_string())),
     })
 }

@@ -30,6 +30,21 @@ pub fn save_track(path: String, changes: HashMap<String, serde_json::Value>) -> 
                     tag.insert_text(ItemKey::Year, v.to_string());
                 }
             }
+            "release_date" => {
+                if let Some(v) = value.as_str() {
+                    tag.insert_text(ItemKey::ReleaseDate, v.to_string());
+                }
+            }
+            "recording_date" => {
+                if let Some(v) = value.as_str() {
+                    tag.insert_text(ItemKey::RecordingDate, v.to_string());
+                }
+            }
+            "original_release_date" => {
+                if let Some(v) = value.as_str() {
+                    tag.insert_text(ItemKey::OriginalReleaseDate, v.to_string());
+                }
+            }
             "track_number" => {
                 if let Some(v) = value.as_str() {
                     tag.insert_text(ItemKey::TrackNumber, v.to_string());
@@ -48,6 +63,11 @@ pub fn save_track(path: String, changes: HashMap<String, serde_json::Value>) -> 
             "comment" => {
                 if let Some(v) = value.as_str() {
                     tag.insert_text(ItemKey::Comment, v.to_string());
+                }
+            }
+            "description" => {
+                if let Some(v) = value.as_str() {
+                    tag.insert_text(ItemKey::Description, v.to_string());
                 }
             }
             "artists" => {
