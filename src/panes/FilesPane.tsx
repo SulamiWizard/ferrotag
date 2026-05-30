@@ -1,5 +1,8 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Track } from "@/types/track";
+
+type SortKey = "track_number" | "title" | "artists" | "album" | "year";
+type SortDir = "asc" | "desc";
 
 interface FilesPaneProps {
   tracks: Track[];
@@ -7,6 +10,39 @@ interface FilesPaneProps {
   onSelect: (tracks: Track[]) => void;
   onDeselect: () => void;
 }
+
+function parseTrackNumber(t: Track): number {
+  const n = parseInt(t.track_number ?? "", 10);
+  return isNaN(n) ? Infinity : n;
+}
+
+function sortedBy(tracks: Track[], key: SortKey, dir: SortDir): Track[] {
+  return [...tracks].sort((a, b) => {
+    let cmp = 0;
+    switch (key) {
+      case "track_number":
+        cmp = parseTrackNumber(a) - parseTrackNumber(b);
+        break;
+      case "title":
+        cmp = (a.title ?? "").localeCompare(b.title ?? "");
+        break;
+      case "artists":
+        cmp = (a.artists[0] ?? "").localeCompare(b.artists[0] ?? "");
+        break;
+      case "album":
+        cmp = (a.album ?? "").localeCompare(b.album ?? "");
+        break;
+      case "year":
+        cmp = (a.recording_date ?? a.year ?? "").localeCompare(
+          b.recording_date ?? b.year ?? "",
+        );
+        break;
+    }
+    return dir === "asc" ? cmp : -cmp;
+  });
+}
+
+const COLS = "grid-cols-[0.5fr_2fr_2fr_2fr_1fr]";
 
 export default function FilesPane({
   tracks,
@@ -16,6 +52,20 @@ export default function FilesPane({
 }: FilesPaneProps) {
   const lastClickedIndex = useRef<number>(-1);
   const selectedPaths = new Set(selectedTracks.map((t) => t.path));
+
+  const [sortKey, setSortKey] = useState<SortKey>("track_number");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const displayedTracks = sortedBy(tracks, sortKey, sortDir);
+
+  const handleHeaderClick = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
 
   const handleTrackClick = (
     track: Track,
@@ -34,7 +84,7 @@ export default function FilesPane({
     } else if (e.shiftKey && lastClickedIndex.current !== -1) {
       const start = Math.min(lastClickedIndex.current, index);
       const end = Math.max(lastClickedIndex.current, index);
-      onSelect(tracks.slice(start, end + 1));
+      onSelect(displayedTracks.slice(start, end + 1));
     } else {
       const isOnlySelected =
         selectedTracks.length === 1 && selectedPaths.has(track.path);
@@ -47,14 +97,47 @@ export default function FilesPane({
     }
   };
 
+  const SortIndicator = ({ col }: { col: SortKey }) =>
+    sortKey === col ? (
+      <span className="ml-1">{sortDir === "asc" ? "▲" : "▼"}</span>
+    ) : null;
+
+  const headerCls =
+    "flex items-center gap-0.5 cursor-pointer select-none hover:text-foreground transition-colors";
+
   return (
     <div className="flex flex-col h-full">
       {/* Column Headers */}
-      <div className="grid grid-cols-4 border-b px-4 py-2 bg-muted/50 text-[11px] font-semibold tracking-wider uppercase text-muted-foreground">
-        <span>Title</span>
-        <span>Artist</span>
-        <span>Album</span>
-        <span>Year</span>
+      <div
+        className={`grid ${COLS} border-b px-4 py-2 bg-muted/50 text-[11px] font-semibold tracking-wider uppercase text-muted-foreground`}
+      >
+        <button
+          className={headerCls}
+          onClick={() => handleHeaderClick("track_number")}
+        >
+          #<SortIndicator col="track_number" />
+        </button>
+        <button
+          className={headerCls}
+          onClick={() => handleHeaderClick("title")}
+        >
+          Title<SortIndicator col="title" />
+        </button>
+        <button
+          className={headerCls}
+          onClick={() => handleHeaderClick("artists")}
+        >
+          Artist<SortIndicator col="artists" />
+        </button>
+        <button
+          className={headerCls}
+          onClick={() => handleHeaderClick("album")}
+        >
+          Album<SortIndicator col="album" />
+        </button>
+        <button className={headerCls} onClick={() => handleHeaderClick("year")}>
+          Year<SortIndicator col="year" />
+        </button>
       </div>
 
       {/* Track list or empty state */}
@@ -64,19 +147,22 @@ export default function FilesPane({
             Drop audio files here
           </div>
         ) : (
-          tracks.map((track, index) => {
+          displayedTracks.map((track, index) => {
             const isSelected = selectedPaths.has(track.path);
             return (
               <div
                 key={track.path}
                 onClick={(e) => handleTrackClick(track, index, e)}
-                className={`grid grid-cols-4 px-4 py-2 text-sm border-b border-border/50 cursor-pointer transition-colors duration-100
+                className={`grid ${COLS} px-4 py-2 text-sm border-b border-border/50 cursor-pointer transition-colors duration-100
                   ${
                     isSelected
                       ? "bg-accent border-l-2 border-l-primary pl-3.5"
                       : "hover:bg-muted/60"
                   }`}
               >
+                <span className="truncate text-muted-foreground tabular-nums">
+                  {track.track_number ?? ""}
+                </span>
                 <span className="truncate font-medium">
                   {track.title ?? "Unknown"}
                 </span>
