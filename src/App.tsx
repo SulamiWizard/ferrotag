@@ -171,10 +171,21 @@ function App() {
   const hasEdits = Object.keys(edits).length > 0 || pendingArtPath !== null;
 
   return (
-    <ResizablePanelGroup orientation="horizontal" className="h-screen w-screen">
+    <ResizablePanelGroup
+      orientation="horizontal"
+      style={{ height: "100vh", width: "100vw", overflow: "hidden" }}
+    >
       <ResizablePanel defaultSize="50%" minSize="15%" maxSize="75%">
-        <div className="flex flex-col h-full">
-          <div className="flex-1 min-h-0 overflow-hidden">
+        {/* Metadata + Save button - never scrolls, save always visible */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            height: "100%",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ flex: 1, overflow: "hidden" }}>
             <MetadataPane
               tracks={selectedTracks}
               albumArt={albumArt}
@@ -183,13 +194,15 @@ function App() {
               onArtExtract={handleArtExtract}
             />
           </div>
-          <div className="border-t border-border/50 p-3">
+          <div
+            style={{ borderTop: "1px solid", padding: "12px", flexShrink: 0 }}
+          >
             <button
               onClick={handleSave}
               disabled={selectedTracks.length === 0 || !hasEdits}
               className="w-full h-8 text-sm font-medium rounded-md bg-primary text-primary-foreground
-                hover:bg-primary/85 active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed
-                transition-all duration-100"
+            hover:bg-primary/85 active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed
+            transition-all duration-100"
             >
               Save
             </button>
@@ -200,12 +213,15 @@ function App() {
       <ResizableHandle />
 
       <ResizablePanel defaultSize="75%">
-        <FilesPane
-          tracks={tracks}
-          selectedTracks={selectedTracks}
-          onSelect={handleSelect}
-          onDeselect={handleDeselect}
-        />
+        {/* Only this panel scrolls */}
+        <div style={{ height: "100%", overflowY: "auto" }}>
+          <FilesPane
+            tracks={tracks}
+            selectedTracks={selectedTracks}
+            onSelect={handleSelect}
+            onDeselect={handleDeselect}
+          />
+        </div>
       </ResizablePanel>
     </ResizablePanelGroup>
   );

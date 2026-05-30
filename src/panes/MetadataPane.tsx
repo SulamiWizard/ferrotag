@@ -222,7 +222,7 @@ export default function MetadataPane({ tracks, albumArt, onEdit, onArtClick, onA
   const firstTrack = tracks[0] ?? null;
 
   return (
-    <div className="flex flex-col gap-3 p-3 overflow-y-auto h-full w-full">
+    <div className="flex flex-col gap-3 p-3 w-full">
       <ComboField
         label="Title"
         value={fields.title}
