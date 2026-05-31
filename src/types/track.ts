@@ -6,7 +6,7 @@
 // read it in metadata/track.rs (read_track), and write it in commands/tags.rs (save_track).
 //
 // artists and album_artists are arrays because a track can have multiple.
-// In the UI they're joined/split with "\\" as a delimiter — see src/lib/tauri.ts.
+// In the UI they're joined/split with "; " as a delimiter — see src/lib/tauri.ts.
 export interface Track {
   path: string;
   title?: string;

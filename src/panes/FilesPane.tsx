@@ -186,7 +186,7 @@ export default function FilesPane({
                   {track.title ?? "Unknown"}
                 </span>
                 <span className="truncate text-muted-foreground">
-                  {track.artists.join("\\\\")}
+                  {track.artists.join("; ")}
                 </span>
                 <span className="truncate text-muted-foreground">
                   {track.album ?? "Unknown"}

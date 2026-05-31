@@ -78,7 +78,7 @@ function App() {
     const parseArtists = (v: unknown): string[] =>
       typeof v === "string"
         ? v
-            .split("\\\\")
+            .split("; ")
             .map((a) => a.trim())
             .filter(Boolean)
         : (v as string[]);

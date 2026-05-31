@@ -16,12 +16,12 @@ interface MetadataPaneProps {
 // they differ. null means the input should show a "<keep>" placeholder —
 // typing in it will override all tracks, leaving it alone will preserve each
 // track's individual value.
-// Arrays (artists) are joined with "\\" for display and editing.
+// Arrays (artists) are joined with "; " for display and editing.
 function sharedValue(tracks: Track[], field: keyof Track): string | null {
   if (tracks.length === 0) return "";
   const values = tracks.map((t) => {
     const v = t[field];
-    if (Array.isArray(v)) return v.join("\\\\");
+    if (Array.isArray(v)) return v.join("; ");
     return (v as string | undefined) ?? "";
   });
   const first = values[0];
