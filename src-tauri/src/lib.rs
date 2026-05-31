@@ -2,13 +2,11 @@ use tauri::menu::{MenuBuilder, SubmenuBuilder};
 
 mod commands;
 mod metadata;
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        // TODO:
-        // get a working menu bar setup
+        // TODO: wire up menu events to the frontend (open folder, save, select all, clear)
         .setup(|app| {
             let menu = MenuBuilder::new(app)
                 .item(
@@ -42,6 +40,9 @@ pub fn run() {
         })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        // All Tauri commands callable from the frontend via invoke() must be
+        // registered here. Adding a #[tauri::command] function without registering
+        // it here will cause invoke() to return an error at runtime.
         .invoke_handler(tauri::generate_handler![
             commands::scan::load_tracks,
             commands::art::load_album_art,

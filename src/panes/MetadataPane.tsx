@@ -12,7 +12,11 @@ interface MetadataPaneProps {
   onArtExtract: () => void;
 }
 
-// null = mixed values across selected tracks → show <keep> placeholder
+// Returns the shared value for a field across all selected tracks, or null if
+// they differ. null means the input should show a "<keep>" placeholder —
+// typing in it will override all tracks, leaving it alone will preserve each
+// track's individual value.
+// Arrays (artists) are joined with "\\" for display and editing.
 function sharedValue(tracks: Track[], field: keyof Track): string | null {
   if (tracks.length === 0) return "";
   const values = tracks.map((t) => {
@@ -24,6 +28,7 @@ function sharedValue(tracks: Track[], field: keyof Track): string | null {
   return values.every((v) => v === first) ? first : null;
 }
 
+// Computes the initial display values for all fields from the current selection.
 function initialFields(tracks: Track[]) {
   return {
     title: sharedValue(tracks, "title"),
@@ -50,10 +55,17 @@ interface ComboInputProps {
   onBlank: () => void;
 }
 
+// Text input with a dropdown that offers three quick actions:
+//   original value — revert to what was on disk
+//   <keep>         — leave each track's existing value unchanged (removes the field from edits)
+//   <blank>        — explicitly clear the field on save
+// onMouseDown preventDefault on the dropdown buttons prevents the input from
+// losing focus before the click registers.
 function ComboInput({ value, originalValue, onChange, onKeep, onBlank }: ComboInputProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Close the dropdown when the user clicks outside the component.
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -112,6 +124,7 @@ function ComboInput({ value, originalValue, onChange, onKeep, onBlank }: ComboIn
   );
 }
 
+// Label + ComboInput as a single reusable field row.
 interface ComboFieldProps {
   label: string;
   value: string | null;
@@ -130,6 +143,8 @@ function ComboField({ label, value, originalValue, onChange, onKeep, onBlank }: 
   );
 }
 
+// A primary ComboField with an expandable section of related sub-fields
+// (e.g. "Year" expands to show TYER, Release Date, Original Release Date).
 interface CollapsibleComboGroupProps {
   primaryLabel: string;
   primaryValue: string | null;
@@ -182,6 +197,9 @@ function CollapsibleComboGroup({
 }
 
 export default function MetadataPane({ tracks, albumArt, onEdit, onArtClick, onArtExtract }: MetadataPaneProps) {
+  // `fields` is the live display state (what's shown in the inputs).
+  // `originals` is a snapshot of values at selection time, used to power the
+  // "revert to original" option in each dropdown. Both reset when tracks changes.
   const [fields, setFields] = useState(initialFields(tracks));
   const [originals, setOriginals] = useState(initialFields(tracks));
 
@@ -191,16 +209,20 @@ export default function MetadataPane({ tracks, albumArt, onEdit, onArtClick, onA
     setOriginals(init);
   }, [tracks]);
 
+  // Updates the display value and notifies App of the change.
   const handleChange = (field: keyof typeof fields, value: string) => {
     setFields((prev) => ({ ...prev, [field]: value }));
     onEdit(field as keyof Track, value);
   };
 
+  // Reverts the field to its original value and removes it from the edits map
+  // (so the field won't be written on save).
   const handleKeep = (field: keyof typeof fields) => {
     setFields((prev) => ({ ...prev, [field]: sharedValue(tracks, field as keyof Track) }));
     onEdit(field as keyof Track, undefined);
   };
 
+  // Sets the field to an empty string, which Rust will write as a blank tag.
   const handleBlank = (field: keyof typeof fields) => {
     setFields((prev) => ({ ...prev, [field]: "" }));
     onEdit(field as keyof Track, "");
@@ -209,6 +231,7 @@ export default function MetadataPane({ tracks, albumArt, onEdit, onArtClick, onA
   const [artContextMenu, setArtContextMenu] = useState(false);
   const artContainerRef = useRef<HTMLDivElement>(null);
 
+  // Close the art context menu when clicking outside.
   useEffect(() => {
     if (!artContextMenu) return;
     const handler = (e: MouseEvent) => {
@@ -256,6 +279,8 @@ export default function MetadataPane({ tracks, albumArt, onEdit, onArtClick, onA
         onBlank={() => handleBlank("album_artists")}
       />
 
+      {/* Year expands to expose the three separate date tags that different
+          formats use (TYER for ID3v2.3, TDRC for ID3v2.4, etc.) */}
       <CollapsibleComboGroup
         primaryLabel="Year"
         primaryValue={fields.recording_date}
@@ -335,6 +360,9 @@ export default function MetadataPane({ tracks, albumArt, onEdit, onArtClick, onA
         />
       </CollapsibleComboGroup>
 
+      {/* Album art — click to replace, right-click to extract to a file.
+          The image is stored as a base64 data URI in App state so it can be
+          previewed immediately without writing to disk. */}
       <div className="flex flex-col gap-1">
         <Label className="text-xs text-muted-foreground">Album Art</Label>
         <div ref={artContainerRef} className="relative w-full max-w-60">

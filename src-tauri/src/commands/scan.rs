@@ -9,6 +9,9 @@ fn is_audio_file(path: &Path) -> bool {
     )
 }
 
+// Accepts a mix of file and directory paths dropped by the user.
+// Directories are walked recursively with walkdir; individual files are
+// checked directly. Unreadable files are silently skipped (read_track returns None).
 #[tauri::command]
 pub fn load_tracks(paths: Vec<String>) -> Vec<TrackMetadata> {
     let mut tracks = Vec::new();
@@ -17,7 +20,6 @@ pub fn load_tracks(paths: Vec<String>) -> Vec<TrackMetadata> {
         let p = Path::new(&path);
 
         if p.is_dir() {
-            // recursively walk directories
             for entry in WalkDir::new(p).into_iter().flatten() {
                 if is_audio_file(entry.path()) {
                     if let Some(track) = read_track(entry.path().to_str().unwrap()) {

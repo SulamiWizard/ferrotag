@@ -18,13 +18,18 @@ interface DragDropPayload {
   paths: string[];
 }
 
+// App is the single source of truth for all state. Child components (FilesPane,
+// MetadataPane) receive data as props and call callbacks to request changes —
+// they never own or mutate state themselves.
 function App() {
-  const [tracks, setTracks] = useState<Track[]>([]);
-  const [selectedTracks, setSelectedTracks] = useState<Track[]>([]);
-  const [edits, setEdits] = useState<Partial<Track>>({});
-  const [albumArt, setAlbumArt] = useState<string | null>(null);
-  const [pendingArtPath, setPendingArtPath] = useState<string | null>(null);
+  const [tracks, setTracks] = useState<Track[]>([]);           // all loaded files
+  const [selectedTracks, setSelectedTracks] = useState<Track[]>([]); // current selection
+  const [edits, setEdits] = useState<Partial<Track>>({});      // pending changes, keyed by field
+  const [albumArt, setAlbumArt] = useState<string | null>(null);     // base64 data URI preview
+  const [pendingArtPath, setPendingArtPath] = useState<string | null>(null); // image to embed on save
 
+  // Add or remove a single field from the edits map.
+  // Passing undefined removes the field (effectively "<keep>" — leave it unchanged on save).
   const handleEdit = (field: keyof Track, value: string | undefined) => {
     if (value === undefined) {
       setEdits((prev) => {
@@ -37,6 +42,9 @@ function App() {
     }
   };
 
+  // Called when the user clicks a row (or navigates with arrow keys).
+  // Clears pending edits and loads album art for the new selection.
+  // If multiple tracks are selected, art is shown only if all share the same image.
   const handleSelect = async (newTracks: Track[]) => {
     setSelectedTracks(newTracks);
     setEdits({});
@@ -61,6 +69,10 @@ function App() {
     setPendingArtPath(null);
   };
 
+  // Writes pending edits to every selected file, then updates the in-memory
+  // track list to reflect the saved values so the UI stays in sync.
+  // Artist splitting (UI string → array) happens inside saveTrack() in lib/tauri.ts.
+  // Album art is applied separately after tag edits.
   const handleSave = async () => {
     if (selectedTracks.length === 0) return;
     const parseArtists = (v: unknown): string[] =>
@@ -89,6 +101,7 @@ function App() {
       });
       setPendingArtPath(null);
     }
+    // Update in-memory tracks so FilesPane reflects the new values immediately
     setTracks((prev) =>
       prev.map((t) =>
         selectedTracks.some((s) => s.path === t.path)
@@ -98,6 +111,8 @@ function App() {
     );
   };
 
+  // Opens a file picker, previews the chosen image in the UI, and stores the
+  // path so it can be embedded into the audio files when the user hits Save.
   const handleArtClick = async () => {
     if (selectedTracks.length === 0) return;
     const selected = await open({
@@ -119,6 +134,7 @@ function App() {
     }
   };
 
+  // Opens a save dialog and extracts the embedded art from the first selected file.
   const handleArtExtract = async () => {
     if (!albumArt || selectedTracks.length === 0) return;
     const destPath = await save({
@@ -134,6 +150,9 @@ function App() {
     });
   };
 
+  // Arrow key navigation — moves selection one row at a time.
+  // Re-registers whenever tracks or selectedTracks change so it always
+  // references the latest state values.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (tracks.length === 0) return;
@@ -153,6 +172,9 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [tracks, selectedTracks]);
 
+  // Listen for files/folders dropped onto the window (Tauri drag-drop event).
+  // Calls the Rust load_tracks command which recursively scans for audio files
+  // and returns their metadata. Runs once on mount; the cleanup unsubscribes.
   useEffect(() => {
     const unlisten = listen<DragDropPayload>(
       "tauri://drag-drop",
@@ -175,8 +197,9 @@ function App() {
       orientation="horizontal"
       style={{ height: "100vh", width: "100vw", overflow: "hidden" }}
     >
+      {/* Left panel: metadata form + save button. Save is outside the scrollable
+          area so it's always visible regardless of how many fields are shown. */}
       <ResizablePanel defaultSize="50%" minSize="15%" maxSize="75%">
-        {/* Metadata + Save button - never scrolls, save always visible */}
         <div
           style={{
             display: "flex",
@@ -212,8 +235,8 @@ function App() {
 
       <ResizableHandle />
 
+      {/* Right panel: sortable, scrollable file list */}
       <ResizablePanel defaultSize="75%">
-        {/* Only this panel scrolls */}
         <div style={{ height: "100%", overflowY: "auto" }}>
           <FilesPane
             tracks={tracks}

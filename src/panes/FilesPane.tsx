@@ -11,11 +11,15 @@ interface FilesPaneProps {
   onDeselect: () => void;
 }
 
+// Track numbers are stored as strings (e.g. "3" or "3/12"). Parse out just the
+// leading number so sorting is numeric rather than lexicographic. Tracks without
+// a number sort to the end.
 function parseTrackNumber(t: Track): number {
   const n = parseInt(t.track_number ?? "", 10);
   return isNaN(n) ? Infinity : n;
 }
 
+// Returns a sorted copy of the array — never mutates the original.
 function sortedBy(tracks: Track[], key: SortKey, dir: SortDir): Track[] {
   return [...tracks].sort((a, b) => {
     let cmp = 0;
@@ -42,6 +46,8 @@ function sortedBy(tracks: Track[], key: SortKey, dir: SortDir): Track[] {
   });
 }
 
+// Shared grid template used by both the header row and every track row so
+// columns always line up.
 const COLS = "grid-cols-[0.5fr_2fr_2fr_2fr_1fr]";
 
 export default function FilesPane({
@@ -50,14 +56,20 @@ export default function FilesPane({
   onSelect,
   onDeselect,
 }: FilesPaneProps) {
+  // useRef persists the last-clicked index across renders without causing a
+  // re-render itself — only needed for shift-click range selection.
   const lastClickedIndex = useRef<number>(-1);
   const selectedPaths = new Set(selectedTracks.map((t) => t.path));
 
+  // Sort state is local to this component — it's purely a display concern and
+  // doesn't affect what gets saved.
   const [sortKey, setSortKey] = useState<SortKey>("track_number");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const displayedTracks = sortedBy(tracks, sortKey, sortDir);
 
+  // Clicking the active column header flips direction; clicking a different
+  // column switches to it with ascending order.
   const handleHeaderClick = (key: SortKey) => {
     if (sortKey === key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -67,6 +79,12 @@ export default function FilesPane({
     }
   };
 
+  // Handles three selection modes:
+  //   Ctrl/Cmd+click — toggle individual track in/out of selection
+  //   Shift+click    — select a contiguous range from the last clicked row
+  //   Plain click    — select only this track (click again to deselect)
+  // Range selection uses displayedTracks (not the original tracks prop) so the
+  // range matches what the user sees after sorting.
   const handleTrackClick = (
     track: Track,
     index: number,
@@ -97,6 +115,7 @@ export default function FilesPane({
     }
   };
 
+  // Only renders an indicator for the currently active sort column.
   const SortIndicator = ({ col }: { col: SortKey }) =>
     sortKey === col ? (
       <span className="ml-1">{sortDir === "asc" ? "▲" : "▼"}</span>
@@ -107,7 +126,7 @@ export default function FilesPane({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Column Headers */}
+      {/* Sticky column headers — clicking any column sorts by it */}
       <div
         className={`grid ${COLS} border-b px-4 py-2 bg-muted/50 text-[11px] font-semibold tracking-wider uppercase text-muted-foreground`}
       >
@@ -140,7 +159,7 @@ export default function FilesPane({
         </button>
       </div>
 
-      {/* Track list or empty state */}
+      {/* Clicking the background (not a row) fires onDeselect via the outer div */}
       <div className="flex-1 min-h-0 overflow-y-auto" onClick={onDeselect}>
         {tracks.length === 0 ? (
           <div className="flex h-full items-center justify-center text-muted-foreground/60 text-sm select-none">

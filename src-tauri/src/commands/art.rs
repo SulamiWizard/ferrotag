@@ -5,11 +5,15 @@ use lofty::probe::Probe;
 
 use crate::metadata::track::get_album_art;
 
+// Extracts the embedded cover art from an audio file and returns it as a
+// base64 data URI. Used to populate the art preview when a track is selected.
 #[tauri::command]
 pub fn load_album_art(path: String) -> Option<String> {
     get_album_art(&path)
 }
 
+// Reads an image file from disk and returns it as a base64 data URI.
+// Used to preview a newly chosen cover image before it's written to any audio files.
 #[tauri::command]
 pub fn read_image(path: String) -> Option<String> {
     let data = std::fs::read(&path).ok()?;
@@ -28,6 +32,9 @@ pub fn read_image(path: String) -> Option<String> {
     Some(format!("data:{};base64,{}", mime, STANDARD.encode(&data)))
 }
 
+// Embeds an image file as the CoverFront picture in each of the given audio files.
+// Any existing CoverFront picture is replaced. Called on Save when the user has
+// chosen a new cover image (pendingArtPath in App.tsx).
 #[tauri::command]
 pub fn set_album_art(audio_paths: Vec<String>, image_path: String) -> Result<(), String> {
     let image_data = std::fs::read(&image_path).map_err(|e| e.to_string())?;
@@ -67,6 +74,8 @@ pub fn set_album_art(audio_paths: Vec<String>, image_path: String) -> Result<(),
     Ok(())
 }
 
+// Extracts the embedded cover art from an audio file and saves it as an image
+// file at dest_path. Prefers the CoverFront picture; falls back to any picture.
 #[tauri::command]
 pub fn extract_album_art(audio_path: String, dest_path: String) -> Result<(), String> {
     let tagged_file = Probe::open(&audio_path)

@@ -1,9 +1,12 @@
-use crate::metadata::track::TrackMetadata;
 use lofty::prelude::*;
 use lofty::probe::Probe;
 use lofty::tag::TagType;
 use std::collections::HashMap;
 
+// Writes a set of field changes to a single audio file.
+// `changes` is a map of field name → new value, containing only the fields the
+// user actually edited (omitted fields are left untouched).
+// An empty string value clears the tag. Fields not in the match arms are ignored.
 #[tauri::command]
 pub fn save_track(path: String, changes: HashMap<String, serde_json::Value>) -> Result<(), String> {
     let mut tagged_file = Probe::open(&path)
@@ -11,6 +14,8 @@ pub fn save_track(path: String, changes: HashMap<String, serde_json::Value>) -> 
         .read()
         .map_err(|e| e.to_string())?;
 
+    // primary_tag_mut() returns the main tag for the format (ID3v2 for MP3,
+    // VorbisComments for FLAC, etc.). If a file has no tag at all this will fail.
     let tag = tagged_file.primary_tag_mut().ok_or("No tag found")?;
 
     for (field, value) in changes {
@@ -70,6 +75,9 @@ pub fn save_track(path: String, changes: HashMap<String, serde_json::Value>) -> 
                     tag.insert_text(ItemKey::Description, v.to_string());
                 }
             }
+            // Artists require special handling because tag formats differ:
+            // FLAC (VorbisComments) supports multiple separate ARTIST tags.
+            // MP3/M4A store artists as a single string joined with "/".
             "artists" => {
                 if let Some(arr) = value.as_array() {
                     let artists: Vec<&str> = arr.iter().filter_map(|v| v.as_str()).collect();
@@ -78,7 +86,6 @@ pub fn save_track(path: String, changes: HashMap<String, serde_json::Value>) -> 
 
                     match tag.tag_type() {
                         TagType::VorbisComments => {
-                            // FLAC — true multiple tags
                             for artist in artists {
                                 tag.push(lofty::tag::TagItem::new(
                                     ItemKey::TrackArtist,
@@ -87,7 +94,6 @@ pub fn save_track(path: String, changes: HashMap<String, serde_json::Value>) -> 
                             }
                         }
                         _ => {
-                            // MP3 and others — join with delimiter
                             tag.set_artist(artists.join("/"));
                         }
                     }
@@ -95,8 +101,7 @@ pub fn save_track(path: String, changes: HashMap<String, serde_json::Value>) -> 
             }
             "album_artists" => {
                 if let Some(arr) = value.as_array() {
-                    let album_artists: Vec<&str> =
-                        arr.iter().filter_map(|v| v.as_str()).collect();
+                    let album_artists: Vec<&str> = arr.iter().filter_map(|v| v.as_str()).collect();
 
                     tag.remove_key(ItemKey::AlbumArtist);
 

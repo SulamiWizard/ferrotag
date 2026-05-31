@@ -4,6 +4,10 @@ use lofty::prelude::*;
 use lofty::probe::Probe;
 use serde::{Deserialize, Serialize};
 
+// Mirrors the TypeScript Track interface in src/types/track.ts.
+// Tauri serializes this to JSON when returning it to the frontend, so field
+// names must stay in snake_case and match exactly. If you add a field here,
+// add it to the TypeScript interface too.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct TrackMetadata {
     pub path: String,
@@ -22,6 +26,8 @@ pub struct TrackMetadata {
     pub description: Option<String>,
 }
 
+// Reads the embedded CoverFront picture and returns it as a base64 data URI
+// (e.g. "data:image/jpeg;base64,...") so it can be used directly in an <img> src.
 pub fn get_album_art(path: &str) -> Option<String> {
     let tagged_file = Probe::open(path).ok()?.read().ok()?;
     let tag = tagged_file.primary_tag()?;
@@ -38,6 +44,9 @@ pub fn get_album_art(path: &str) -> Option<String> {
     Some(format!("data:{};base64,{}", mime, b64))
 }
 
+// Opens an audio file with lofty and reads all supported metadata fields into
+// a TrackMetadata struct. Returns None if the file can't be opened or parsed.
+// Fields missing from the file's tags are returned as None/empty vec.
 pub fn read_track(path: &str) -> Option<TrackMetadata> {
     let tagged_file = Probe::open(path).ok()?.read().ok()?;
     let tag = tagged_file.primary_tag();
@@ -45,6 +54,8 @@ pub fn read_track(path: &str) -> Option<TrackMetadata> {
     Some(TrackMetadata {
         path: path.to_string(),
         title: tag.and_then(|t| t.title().map(|s| s.to_string())),
+        // get_strings returns all values for the key (important for FLAC which
+        // can have multiple ARTIST tags).
         artists: tag
             .map(|t| {
                 t.get_strings(ItemKey::TrackArtist)
