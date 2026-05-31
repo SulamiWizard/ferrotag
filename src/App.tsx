@@ -217,9 +217,7 @@ function App() {
               onArtExtract={handleArtExtract}
             />
           </div>
-          <div
-            style={{ borderTop: "1px solid", padding: "12px", flexShrink: 0 }}
-          >
+          <div className="border-t border-border p-3 shrink-0">
             <button
               onClick={handleSave}
               disabled={selectedTracks.length === 0 || !hasEdits}
