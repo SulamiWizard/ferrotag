@@ -78,9 +78,9 @@ function App() {
     const parseArtists = (v: unknown): string[] =>
       typeof v === "string"
         ? v
-            .split("; ")
-            .map((a) => a.trim())
-            .filter(Boolean)
+          .split("; ")
+          .map((a) => a.trim())
+          .filter(Boolean)
         : (v as string[]);
     const parsedEdits = {
       ...edits,
@@ -199,7 +199,7 @@ function App() {
     >
       {/* Left panel: metadata form + save button. Save is outside the scrollable
           area so it's always visible regardless of how many fields are shown. */}
-      <ResizablePanel defaultSize="50%" minSize="15%" maxSize="75%">
+      <ResizablePanel defaultSize="25%" minSize="15%" maxSize="75%">
         <div
           style={{
             display: "flex",
@@ -208,7 +208,7 @@ function App() {
             overflow: "hidden",
           }}
         >
-          <div style={{ flex: 1, overflow: "hidden" }}>
+          <div style={{ flex: 1, overflow: "auto" }}>
             <MetadataPane
               tracks={selectedTracks}
               albumArt={albumArt}
