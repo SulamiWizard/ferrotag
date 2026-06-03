@@ -73,8 +73,12 @@ pub fn read_track(path: &str) -> Option<TrackMetadata> {
             .unwrap_or_default(),
         year: tag.and_then(|t| t.get_string(ItemKey::Year).map(|s| s.to_string())),
         release_date: tag.and_then(|t| t.get_string(ItemKey::ReleaseDate).map(|s| s.to_string())),
-        recording_date: tag.and_then(|t| t.get_string(ItemKey::RecordingDate).map(|s| s.to_string())),
-        original_release_date: tag.and_then(|t| t.get_string(ItemKey::OriginalReleaseDate).map(|s| s.to_string())),
+        recording_date: tag
+            .and_then(|t| t.get_string(ItemKey::RecordingDate).map(|s| s.to_string())),
+        original_release_date: tag.and_then(|t| {
+            t.get_string(ItemKey::OriginalReleaseDate)
+                .map(|s| s.to_string())
+        }),
         track_number: tag.and_then(|t| t.get_string(ItemKey::TrackNumber).map(|s| s.to_string())),
         disc_number: tag.and_then(|t| t.get_string(ItemKey::DiscNumber).map(|s| s.to_string())),
         genre: tag.and_then(|t| t.genre().map(|s| s.to_string())),

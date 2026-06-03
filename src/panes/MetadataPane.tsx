@@ -61,7 +61,13 @@ interface ComboInputProps {
 //   <blank>        — explicitly clear the field on save
 // onMouseDown preventDefault on the dropdown buttons prevents the input from
 // losing focus before the click registers.
-function ComboInput({ value, originalValue, onChange, onKeep, onBlank }: ComboInputProps) {
+function ComboInput({
+  value,
+  originalValue,
+  onChange,
+  onKeep,
+  onBlank,
+}: ComboInputProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -97,7 +103,10 @@ function ComboInput({ value, originalValue, onChange, onKeep, onBlank }: ComboIn
               type="button"
               className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors truncate"
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { onChange(originalValue); setOpen(false); }}
+              onClick={() => {
+                onChange(originalValue);
+                setOpen(false);
+              }}
             >
               {originalValue}
             </button>
@@ -106,7 +115,10 @@ function ComboInput({ value, originalValue, onChange, onKeep, onBlank }: ComboIn
             type="button"
             className="w-full text-left px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted transition-colors font-mono"
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => { onKeep(); setOpen(false); }}
+            onClick={() => {
+              onKeep();
+              setOpen(false);
+            }}
           >
             &lt;keep&gt;
           </button>
@@ -114,7 +126,10 @@ function ComboInput({ value, originalValue, onChange, onKeep, onBlank }: ComboIn
             type="button"
             className="w-full text-left px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted transition-colors font-mono"
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => { onBlank(); setOpen(false); }}
+            onClick={() => {
+              onBlank();
+              setOpen(false);
+            }}
           >
             &lt;blank&gt;
           </button>
@@ -134,11 +149,24 @@ interface ComboFieldProps {
   onBlank: () => void;
 }
 
-function ComboField({ label, value, originalValue, onChange, onKeep, onBlank }: ComboFieldProps) {
+function ComboField({
+  label,
+  value,
+  originalValue,
+  onChange,
+  onKeep,
+  onBlank,
+}: ComboFieldProps) {
   return (
     <div className="flex flex-col gap-1 w-full">
       <Label className="text-xs text-muted-foreground">{label}</Label>
-      <ComboInput value={value} originalValue={originalValue} onChange={onChange} onKeep={onKeep} onBlank={onBlank} />
+      <ComboInput
+        value={value}
+        originalValue={originalValue}
+        onChange={onChange}
+        onKeep={onKeep}
+        onBlank={onBlank}
+      />
     </div>
   );
 }
@@ -196,7 +224,13 @@ function CollapsibleComboGroup({
   );
 }
 
-export default function MetadataPane({ tracks, albumArt, onEdit, onArtClick, onArtExtract }: MetadataPaneProps) {
+export default function MetadataPane({
+  tracks,
+  albumArt,
+  onEdit,
+  onArtClick,
+  onArtExtract,
+}: MetadataPaneProps) {
   // `fields` is the live display state (what's shown in the inputs).
   // `originals` is a snapshot of values at selection time, used to power the
   // "revert to original" option in each dropdown. Both reset when tracks changes.
@@ -218,7 +252,10 @@ export default function MetadataPane({ tracks, albumArt, onEdit, onArtClick, onA
   // Reverts the field to its original value and removes it from the edits map
   // (so the field won't be written on save).
   const handleKeep = (field: keyof typeof fields) => {
-    setFields((prev) => ({ ...prev, [field]: sharedValue(tracks, field as keyof Track) }));
+    setFields((prev) => ({
+      ...prev,
+      [field]: sharedValue(tracks, field as keyof Track),
+    }));
     onEdit(field as keyof Track, undefined);
   };
 
@@ -377,7 +414,11 @@ export default function MetadataPane({ tracks, albumArt, onEdit, onArtClick, onA
               ${tracks.length > 0 ? "cursor-pointer" : ""}`}
           >
             {albumArt ? (
-              <img src={albumArt} alt="Album Art" className="w-full h-full object-cover" />
+              <img
+                src={albumArt}
+                alt="Album Art"
+                className="w-full h-full object-cover"
+              />
             ) : (
               <span className="text-xs text-muted-foreground/50 select-none">
                 {tracks.length > 0 ? "Click to add art" : "No art"}
@@ -385,7 +426,9 @@ export default function MetadataPane({ tracks, albumArt, onEdit, onArtClick, onA
             )}
             {tracks.length > 0 && (
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <span className="text-white text-xs font-medium select-none">Change image</span>
+                <span className="text-white text-xs font-medium select-none">
+                  Change image
+                </span>
               </div>
             )}
           </div>
@@ -395,7 +438,10 @@ export default function MetadataPane({ tracks, albumArt, onEdit, onArtClick, onA
                 type="button"
                 className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors whitespace-nowrap"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => { onArtExtract(); setArtContextMenu(false); }}
+                onClick={() => {
+                  onArtExtract();
+                  setArtContextMenu(false);
+                }}
               >
                 Extract image
               </button>
@@ -403,7 +449,10 @@ export default function MetadataPane({ tracks, albumArt, onEdit, onArtClick, onA
                 type="button"
                 className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors whitespace-nowrap"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => { onArtClick(); setArtContextMenu(false); }}
+                onClick={() => {
+                  onArtClick();
+                  setArtContextMenu(false);
+                }}
               >
                 Change image
               </button>
@@ -413,7 +462,7 @@ export default function MetadataPane({ tracks, albumArt, onEdit, onArtClick, onA
       </div>
 
       <div className="flex flex-col gap-1">
-        <Label className="text-xs text-muted-foreground">Directory</Label>
+        <Label className="text-xs text-muted-foreground">Path</Label>
         <Input
           readOnly
           value={

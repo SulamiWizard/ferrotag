@@ -12,7 +12,8 @@ import {
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useKeyBindings } from "@/hooks/useKeyBindings";
 
 interface DragDropPayload {
   paths: string[];
@@ -22,10 +23,10 @@ interface DragDropPayload {
 // MetadataPane) receive data as props and call callbacks to request changes —
 // they never own or mutate state themselves.
 function App() {
-  const [tracks, setTracks] = useState<Track[]>([]);           // all loaded files
+  const [tracks, setTracks] = useState<Track[]>([]); // all loaded files
   const [selectedTracks, setSelectedTracks] = useState<Track[]>([]); // current selection
-  const [edits, setEdits] = useState<Partial<Track>>({});      // pending changes, keyed by field
-  const [albumArt, setAlbumArt] = useState<string | null>(null);     // base64 data URI preview
+  const [edits, setEdits] = useState<Partial<Track>>({}); // pending changes, keyed by field
+  const [albumArt, setAlbumArt] = useState<string | null>(null); // base64 data URI preview
   const [pendingArtPath, setPendingArtPath] = useState<string | null>(null); // image to embed on save
 
   // Add or remove a single field from the edits map.
@@ -78,9 +79,9 @@ function App() {
     const parseArtists = (v: unknown): string[] =>
       typeof v === "string"
         ? v
-          .split("; ")
-          .map((a) => a.trim())
-          .filter(Boolean)
+            .split("; ")
+            .map((a) => a.trim())
+            .filter(Boolean)
         : (v as string[]);
     const parsedEdits = {
       ...edits,
@@ -150,28 +151,42 @@ function App() {
     });
   };
 
-  // Arrow key navigation — moves selection one row at a time.
-  // Re-registers whenever tracks or selectedTracks change so it always
-  // references the latest state values.
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (tracks.length === 0) return;
-      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-      e.preventDefault();
-      const anchor = selectedTracks[selectedTracks.length - 1];
-      const currentIndex = anchor
-        ? tracks.findIndex((t) => t.path === anchor.path)
-        : -1;
-      const nextIndex =
-        e.key === "ArrowDown"
-          ? Math.min(currentIndex + 1, tracks.length - 1)
-          : Math.max(currentIndex - 1, 0);
-      if (nextIndex !== currentIndex) handleSelect([tracks[nextIndex]]);
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [tracks, selectedTracks]);
-
+  // Keybind handling
+  useKeyBindings(
+    useMemo(
+      () => ({
+        arrowdown: (e: KeyboardEvent) => {
+          if (tracks.length === 0) return;
+          e.preventDefault();
+          const anchor = selectedTracks[selectedTracks.length - 1];
+          const currentIndex = anchor
+            ? tracks.findIndex((t) => t.path === anchor.path)
+            : -1;
+          const next = Math.min(currentIndex + 1, tracks.length - 1);
+          if (next !== currentIndex) handleSelect([tracks[next]]);
+        },
+        arrowup: (e: KeyboardEvent) => {
+          if (tracks.length === 0) return;
+          e.preventDefault();
+          const anchor = selectedTracks[selectedTracks.length - 1];
+          const currentIndex = anchor
+            ? tracks.findIndex((t) => t.path === anchor.path)
+            : -1;
+          const next = Math.max(currentIndex - 1, 0);
+          if (next !== currentIndex) handleSelect([tracks[next]]);
+        },
+        "mod+s": (e: KeyboardEvent) => {
+          e.preventDefault();
+          handleSave();
+        },
+        "mod+a": (e: KeyboardEvent) => {
+          e.preventDefault();
+          handleSelect(tracks);
+        },
+      }),
+      [tracks, selectedTracks],
+    ),
+  );
   // Listen for files/folders dropped onto the window (Tauri drag-drop event).
   // Calls the Rust load_tracks command which recursively scans for audio files
   // and returns their metadata. Runs once on mount; the cleanup unsubscribes.
