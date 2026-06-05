@@ -74,6 +74,23 @@ pub fn set_album_art(audio_paths: Vec<String>, image_path: String) -> Result<(),
     Ok(())
 }
 
+// Removes the CoverFront picture from each of the given audio files.
+#[tauri::command]
+pub fn remove_album_art(audio_paths: Vec<String>) -> Result<(), String> {
+    for path in &audio_paths {
+        let mut tagged_file = Probe::open(path)
+            .map_err(|e| e.to_string())?
+            .read()
+            .map_err(|e| e.to_string())?;
+        let tag = tagged_file.primary_tag_mut().ok_or("No tag found")?;
+        tag.remove_picture_type(PictureType::CoverFront);
+        tagged_file
+            .save_to_path(path, lofty::config::WriteOptions::default())
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 // Extracts the embedded cover art from an audio file and saves it as an image
 // file at dest_path. Prefers the CoverFront picture; falls back to any picture.
 #[tauri::command]

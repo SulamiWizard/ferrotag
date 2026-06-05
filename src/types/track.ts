@@ -20,6 +20,18 @@ export interface Track {
   track_number?: string;
   disc_number?: string;
   genre?: string;
+  composer?: string;
+  bpm?: string;
   comment?: string;
   description?: string;
+  lyricist?: string;
+  conductor?: string;
+  arranger?: string;
+  remixer?: string;
+  copyright?: string;
+  encoded_by?: string;
+  sort_title?: string;
+  sort_artist?: string;
+  sort_album?: string;
+  sort_album_artist?: string;
 }

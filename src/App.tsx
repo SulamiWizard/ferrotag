@@ -91,7 +91,7 @@ export default function App() {
   }, [rows, sort, search]);
 
   const selRows = useMemo(() => rows.filter((r) => selectedIds.has(r.id)), [rows, selectedIds]);
-  const dirtyCount = useMemo(() => rows.filter((r) => r.modified || r.pendingArtPath).length, [rows]);
+  const dirtyCount = useMemo(() => rows.filter((r) => r.modified || r.pendingArtPath || r.pendingArtRemove).length, [rows]);
 
   const loadAllArtRef = useRef<AbortController | null>(null);
 
@@ -164,21 +164,23 @@ export default function App() {
 
   // Save all dirty rows to disk.
   const handleSave = useCallback(async () => {
-    const dirty = rows.filter((r) => r.modified || r.pendingArtPath);
+    const dirty = rows.filter((r) => r.modified || r.pendingArtPath || r.pendingArtRemove);
     if (dirty.length === 0) return;
     for (const row of dirty) {
       const changes = buildSaveChanges(row.tags, row.orig);
       if (Object.keys(changes).length > 0) {
         await invoke("save_track", { path: row.path, changes });
       }
-      if (row.pendingArtPath) {
+      if (row.pendingArtRemove) {
+        await invoke("remove_album_art", { audioPaths: [row.path] });
+      } else if (row.pendingArtPath) {
         await invoke("set_album_art", { audioPaths: [row.path], imagePath: row.pendingArtPath });
       }
     }
     setRows((prev) =>
       prev.map((r) =>
-        r.modified || r.pendingArtPath
-          ? { ...r, orig: { ...r.tags }, modified: false, pendingArtPath: null }
+        r.modified || r.pendingArtPath || r.pendingArtRemove
+          ? { ...r, orig: { ...r.tags }, modified: false, pendingArtPath: null, pendingArtRemove: false }
           : r,
       ),
     );
@@ -187,11 +189,11 @@ export default function App() {
   // Revert all dirty rows to their orig snapshot.
   const handleRevert = useCallback(() => {
     setRows((prev) =>
-      prev.map((r) =>
-        r.modified || r.pendingArtPath
-          ? { ...r, tags: { ...r.orig }, modified: false, pendingArtPath: null }
-          : r,
-      ),
+      prev.map((r) => {
+        if (!r.modified && !r.pendingArtPath && !r.pendingArtRemove) return r;
+        const artUrl = r.pendingArtRemove ? undefined : r.artUrl;
+        return { ...r, tags: { ...r.orig }, modified: false, pendingArtPath: null, pendingArtRemove: false, artUrl };
+      }),
     );
   }, []);
 
@@ -247,6 +249,15 @@ export default function App() {
     );
   };
 
+  const handleArtRemove = useCallback(() => {
+    setRows((prev) =>
+      prev.map((row) => {
+        if (!selectedIds.has(row.id)) return row;
+        return { ...row, artUrl: null, pendingArtPath: null, pendingArtRemove: true };
+      }),
+    );
+  }, [selectedIds]);
+
   // Extract embedded art from the first selected file to disk.
   const handleArtExtract = async () => {
     if (selRows.length === 0) return;
@@ -260,9 +271,13 @@ export default function App() {
     await invoke("extract_album_art", { audioPath: selRows[0].path, destPath });
   };
 
-  // Keyboard navigation + shortcuts.
+  // Stable refs so menu event listeners (registered once) always call the latest handler.
   const handleSaveRef = useRef(handleSave);
   handleSaveRef.current = handleSave;
+  const handleOpenRef = useRef(handleOpen);
+  handleOpenRef.current = handleOpen;
+  const displayedRef = useRef(displayed);
+  displayedRef.current = displayed;
 
   useKeyBindings(
     useMemo(
@@ -315,6 +330,23 @@ export default function App() {
     });
     return () => { unlisten.then((f) => f()); };
   }, [loadTracks]);
+
+  // Native menu bar events emitted from Rust via app.emit().
+  useEffect(() => {
+    const unlisteners = Promise.all([
+      listen("menu-open", () => handleOpenRef.current()),
+      listen("menu-save", () => handleSaveRef.current()),
+      listen("menu-select-all", () => {
+        setSelectedIds(new Set(displayedRef.current.map((r) => r.id)));
+      }),
+      listen("menu-clear", () => {
+        loadAllArtRef.current?.abort();
+        setRows([]);
+        setSelectedIds(new Set());
+      }),
+    ]);
+    return () => { unlisteners.then((fns) => fns.forEach((f) => f())); };
+  }, []);
 
   // Compute art state for the editor from selected rows.
   const artUrls = selRows.map((r) => r.artUrl);
@@ -394,6 +426,7 @@ export default function App() {
             onArtClick={handleArtClick}
             onArtDrop={handleArtDrop}
             onArtExtract={handleArtExtract}
+            onArtRemove={handleArtRemove}
           />
         </ResizablePanel>
       </ResizablePanelGroup>

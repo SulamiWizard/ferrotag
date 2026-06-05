@@ -65,6 +65,16 @@ pub fn save_track(path: String, changes: HashMap<String, serde_json::Value>) -> 
                     tag.set_genre(v.to_string());
                 }
             }
+            "composer" => {
+                if let Some(v) = value.as_str() {
+                    tag.insert_text(ItemKey::Composer, v.to_string());
+                }
+            }
+            "bpm" => {
+                if let Some(v) = value.as_str() {
+                    tag.insert_text(ItemKey::Bpm, v.to_string());
+                }
+            }
             "comment" => {
                 if let Some(v) = value.as_str() {
                     tag.insert_text(ItemKey::Comment, v.to_string());
@@ -73,6 +83,56 @@ pub fn save_track(path: String, changes: HashMap<String, serde_json::Value>) -> 
             "description" => {
                 if let Some(v) = value.as_str() {
                     tag.insert_text(ItemKey::Description, v.to_string());
+                }
+            }
+            "lyricist" => {
+                if let Some(v) = value.as_str() {
+                    tag.insert_text(ItemKey::Lyricist, v.to_string());
+                }
+            }
+            "conductor" => {
+                if let Some(v) = value.as_str() {
+                    tag.insert_text(ItemKey::Conductor, v.to_string());
+                }
+            }
+            "arranger" => {
+                if let Some(v) = value.as_str() {
+                    tag.insert_text(ItemKey::Arranger, v.to_string());
+                }
+            }
+            "remixer" => {
+                if let Some(v) = value.as_str() {
+                    tag.insert_text(ItemKey::Remixer, v.to_string());
+                }
+            }
+            "copyright" => {
+                if let Some(v) = value.as_str() {
+                    tag.insert_text(ItemKey::CopyrightMessage, v.to_string());
+                }
+            }
+            "encoded_by" => {
+                if let Some(v) = value.as_str() {
+                    tag.insert_text(ItemKey::EncodedBy, v.to_string());
+                }
+            }
+            "sort_title" => {
+                if let Some(v) = value.as_str() {
+                    tag.insert_text(ItemKey::TrackTitleSortOrder, v.to_string());
+                }
+            }
+            "sort_artist" => {
+                if let Some(v) = value.as_str() {
+                    tag.insert_text(ItemKey::TrackArtistSortOrder, v.to_string());
+                }
+            }
+            "sort_album" => {
+                if let Some(v) = value.as_str() {
+                    tag.insert_text(ItemKey::AlbumTitleSortOrder, v.to_string());
+                }
+            }
+            "sort_album_artist" => {
+                if let Some(v) = value.as_str() {
+                    tag.insert_text(ItemKey::AlbumArtistSortOrder, v.to_string());
                 }
             }
             // Artists require special handling because tag formats differ:

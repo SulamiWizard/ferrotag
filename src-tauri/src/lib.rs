@@ -1,4 +1,5 @@
 use tauri::menu::{MenuBuilder, SubmenuBuilder};
+use tauri::Emitter;
 
 mod commands;
 mod metadata;
@@ -29,11 +30,11 @@ pub fn run() {
             app.set_menu(menu)?;
 
             app.on_menu_event(|app, event| match event.id().as_ref() {
-                "open" => {}
-                "save" => {}
-                "quit" => {
-                    app.exit(0);
-                }
+                "open" => { let _ = app.emit("menu-open", ()); }
+                "save" => { let _ = app.emit("menu-save", ()); }
+                "select_all" => { let _ = app.emit("menu-select-all", ()); }
+                "clear" => { let _ = app.emit("menu-clear", ()); }
+                "quit" => { app.exit(0); }
                 _ => {}
             });
             Ok(())
@@ -48,6 +49,7 @@ pub fn run() {
             commands::art::load_album_art,
             commands::art::read_image,
             commands::art::set_album_art,
+            commands::art::remove_album_art,
             commands::art::extract_album_art,
             commands::tags::save_track,
         ])

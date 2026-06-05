@@ -7,17 +7,27 @@ export interface EditableTags {
   artist: string;
   album: string;
   albumArtist: string;
-  // Year group — recording_date is the primary "Year" field shown in the editor.
-  // yearLegacy (TYER/ID3v2.3), releaseDate, and originalReleaseDate are sub-fields.
-  year: string;           // recording_date (TDRC / primary)
-  yearLegacy: string;     // year (TYER / ID3v2.3)
-  releaseDate: string;    // release_date
-  originalReleaseDate: string; // original_release_date
+  year: string;
+  yearLegacy: string;
+  releaseDate: string;
+  originalReleaseDate: string;
   genre: string;
   trackNo: string;
   discNo: string;
+  composer: string;
+  bpm: string;
   comment: string;
-  description: string;    // sub-field under Comment
+  description: string;
+  lyricist: string;
+  conductor: string;
+  arranger: string;
+  remixer: string;
+  copyright: string;
+  encodedBy: string;
+  sortTitle: string;
+  sortArtist: string;
+  sortAlbum: string;
+  sortAlbumArtist: string;
 }
 
 // A loaded track decorated with per-track editable state for dirty tracking.
@@ -31,7 +41,8 @@ export interface TrackRow {
   orig: EditableTags;    // pristine snapshot (updated on save)
   modified: boolean;
   artUrl: string | null | undefined;
-  pendingArtPath: string | null;  // staged art image path, written on save
+  pendingArtPath: string | null;
+  pendingArtRemove: boolean;
 }
 
 export type SortKey = "trackNo" | "title" | "artist" | "album" | "year" | "fmt";
@@ -49,6 +60,7 @@ export function trackToRow(t: Track): TrackRow {
     modified: false,
     artUrl: undefined,
     pendingArtPath: null,
+    pendingArtRemove: false,
   };
 }
 
@@ -65,8 +77,20 @@ function trackToTags(t: Track): EditableTags {
     genre: t.genre ?? "",
     trackNo: t.track_number ?? "",
     discNo: t.disc_number ?? "",
+    composer: t.composer ?? "",
+    bpm: t.bpm ?? "",
     comment: t.comment ?? "",
     description: t.description ?? "",
+    lyricist: t.lyricist ?? "",
+    conductor: t.conductor ?? "",
+    arranger: t.arranger ?? "",
+    remixer: t.remixer ?? "",
+    copyright: t.copyright ?? "",
+    encodedBy: t.encoded_by ?? "",
+    sortTitle: t.sort_title ?? "",
+    sortArtist: t.sort_artist ?? "",
+    sortAlbum: t.sort_album ?? "",
+    sortAlbumArtist: t.sort_album_artist ?? "",
   };
 }
 
@@ -135,7 +159,19 @@ export function buildSaveChanges(tags: EditableTags, orig: EditableTags): Record
   if (tags.genre !== orig.genre) c.genre = tags.genre;
   if (tags.trackNo !== orig.trackNo) c.track_number = tags.trackNo;
   if (tags.discNo !== orig.discNo) c.disc_number = tags.discNo;
+  if (tags.composer !== orig.composer) c.composer = tags.composer;
+  if (tags.bpm !== orig.bpm) c.bpm = tags.bpm;
   if (tags.comment !== orig.comment) c.comment = tags.comment;
   if (tags.description !== orig.description) c.description = tags.description;
+  if (tags.lyricist !== orig.lyricist) c.lyricist = tags.lyricist;
+  if (tags.conductor !== orig.conductor) c.conductor = tags.conductor;
+  if (tags.arranger !== orig.arranger) c.arranger = tags.arranger;
+  if (tags.remixer !== orig.remixer) c.remixer = tags.remixer;
+  if (tags.copyright !== orig.copyright) c.copyright = tags.copyright;
+  if (tags.encodedBy !== orig.encodedBy) c.encoded_by = tags.encodedBy;
+  if (tags.sortTitle !== orig.sortTitle) c.sort_title = tags.sortTitle;
+  if (tags.sortArtist !== orig.sortArtist) c.sort_artist = tags.sortArtist;
+  if (tags.sortAlbum !== orig.sortAlbum) c.sort_album = tags.sortAlbum;
+  if (tags.sortAlbumArtist !== orig.sortAlbumArtist) c.sort_album_artist = tags.sortAlbumArtist;
   return c;
 }

@@ -547,6 +547,8 @@ textarea.tf-input {
   white-space: nowrap;
 }
 .art-menu__item:hover { background: var(--bg-2); color: var(--text-0); }
+.art-menu__item--danger { color: oklch(0.65 0.18 25); }
+.art-menu__item--danger:hover { background: oklch(0.65 0.18 25 / 0.12); color: oklch(0.72 0.18 25); }
 
 /* ——— status bar ——— */
 .statusbar {
