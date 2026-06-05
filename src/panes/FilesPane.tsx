@@ -34,34 +34,6 @@ const GRID_COLS = COLUMNS.map((c) =>
   c.w ? `${c.w}px` : `minmax(0, ${c.grow}fr)`,
 ).join(" ");
 
-function CoverThumb({ artUrl, size = 18 }: { artUrl: string | null | undefined; size?: number }) {
-  if (artUrl) {
-    return (
-      <img
-        className="cover-mini cover-mini--img"
-        src={artUrl}
-        alt=""
-        style={{ width: size, height: size }}
-      />
-    );
-  }
-  return (
-    <div className="cover-mini cover-mini--empty" style={{ width: size, height: size }}>
-      <svg viewBox="0 0 24 24" width={size * 0.62} height={size * 0.62} aria-hidden="true">
-        <path
-          d="M9 18V6l10-2v12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <circle cx="7" cy="18" r="2.4" fill="currentColor" />
-        <circle cx="17" cy="16" r="2.4" fill="currentColor" />
-      </svg>
-    </div>
-  );
-}
 
 export default function FilesPane({ rows, selectedIds, sort, search, totalCount, onSort, onSelect }: FilesPaneProps) {
   const lastClickRef = useRef<string | null>(null);
@@ -168,9 +140,8 @@ export default function FilesPane({ rows, selectedIds, sort, search, totalCount,
                 <div className="fl-td fl-td--r mono dim">
                   {row.tags.trackNo || <span className="ph">—</span>}
                 </div>
-                {/* title + cover thumb */}
+                {/* title */}
                 <div className="fl-td fl-td--title">
-                  <CoverThumb artUrl={row.artUrl} />
                   <span className={untagged ? "muted-italic" : ""} style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
                     {row.tags.title || row.file}
                   </span>

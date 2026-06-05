@@ -89,53 +89,12 @@ html, body, #root {
   width: 100%;
   height: 100%;
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto 1fr auto;
   background: var(--bg-1);
   color: var(--text-0);
   font-size: var(--fs);
 }
 
-/* ——— title bar ——— */
-.titlebar {
-  height: 38px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 0 14px;
-  background: var(--bg-titlebar);
-  border-bottom: 1px solid var(--border-soft);
-  user-select: none;
-  -webkit-app-region: drag;
-}
-.titlebar__lights {
-  display: flex;
-  gap: 8px;
-  -webkit-app-region: no-drag;
-}
-.tl {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  transition: opacity 0.1s, filter 0.1s;
-}
-.tl:hover { filter: brightness(1.2); }
-.tl--c { background: #f1584f; }
-.tl--m { background: #f4be4f; }
-.tl--x { background: #5fc954; }
-.titlebar__title {
-  flex: 1;
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  justify-content: center;
-}
-.brand { font-weight: 600; letter-spacing: -0.01em; font-size: 13px; color: var(--text-0); }
-.brand__tag { color: var(--accent); }
-.titlebar__doc { font-size: 11px; color: var(--text-3); }
-.titlebar__right { font-size: 11px; color: var(--text-3); min-width: 60px; text-align: right; }
 
 /* ——— toolbar ——— */
 .toolbar {

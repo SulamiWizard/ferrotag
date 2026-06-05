@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import "./App.css";
 
@@ -77,7 +76,6 @@ export default function App() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "trackNo", dir: "asc" });
   const [search, setSearch] = useState("");
-  const [folderPath, setFolderPath] = useState<string | null>(null);
 
   const displayed = useMemo(() => {
     let r = rows;
@@ -95,12 +93,9 @@ export default function App() {
   const selRows = useMemo(() => rows.filter((r) => selectedIds.has(r.id)), [rows, selectedIds]);
   const dirtyCount = useMemo(() => rows.filter((r) => r.modified || r.pendingArtPath).length, [rows]);
 
-  // Batch-load art for all rows in the background, 8 concurrent calls at a time.
-  // Art is loaded progressively so the UI updates as each batch completes.
   const loadAllArtRef = useRef<AbortController | null>(null);
 
   const loadAllArt = useCallback(async (newRows: TrackRow[]) => {
-    // Cancel any in-flight load from a previous track load.
     loadAllArtRef.current?.abort();
     const controller = new AbortController();
     loadAllArtRef.current = controller;
@@ -115,19 +110,15 @@ export default function App() {
       if (controller.signal.aborted) break;
       const updates = new Map(batch.map((r, j) => [r.id, results[j]]));
       setRows((prev) =>
-        prev.map((row) =>
-          updates.has(row.id) ? { ...row, artUrl: updates.get(row.id) ?? null } : row,
-        ),
+        prev.map((row) => (updates.has(row.id) ? { ...row, artUrl: updates.get(row.id) ?? null } : row)),
       );
     }
   }, []);
 
-  // Convert Tauri Track[] → TrackRow[] then kick off background art loading.
-  const loadTracks = useCallback(async (tracks: Track[], folder?: string) => {
+  const loadTracks = useCallback(async (tracks: Track[]) => {
     const newRows = tracks.map(trackToRow);
     setRows(newRows);
     setSelectedIds(new Set());
-    if (folder) setFolderPath(folder);
     loadAllArt(newRows);
   }, [loadAllArt]);
 
@@ -209,7 +200,7 @@ export default function App() {
     const dir = await open({ directory: true, multiple: false });
     if (!dir || typeof dir !== "string") return;
     const tracks = await invoke<Track[]>("load_tracks", { paths: [dir] });
-    await loadTracks(tracks, dir);
+    await loadTracks(tracks);
   };
 
   // Stage new album art from a file picker for all selected tracks.
@@ -330,37 +321,8 @@ export default function App() {
   const sharedArtUrl = artUrls.length > 0 && artUrls.every((u) => u === artUrls[0]) ? artUrls[0] : null;
   const mixedArt = artUrls.length > 1 && !artUrls.every((u) => u === artUrls[0]);
 
-  const appWin = getCurrentWindow();
-
-  // Display folder name in titlebar.
-  const folderDisplay = folderPath
-    ? folderPath.replace(/^\/home\/[^/]+/, "~")
-    : rows.length > 0
-    ? "…"
-    : null;
-
   return (
     <div className="win" data-theme="dark" data-density="balanced">
-      {/* ——— title bar ——— */}
-      <div className="titlebar" data-tauri-drag-region>
-        <div className="titlebar__lights">
-          <button className="tl tl--c" title="Close" onClick={() => appWin.close()} />
-          <button className="tl tl--m" title="Minimize" onClick={() => appWin.minimize()} />
-          <button className="tl tl--x" title="Maximize" onClick={() => appWin.toggleMaximize()} />
-        </div>
-        <div className="titlebar__title">
-          <span className="brand">
-            ferro<span className="brand__tag">tag</span>
-          </span>
-          {folderDisplay && (
-            <span className="titlebar__doc mono" title={folderPath ?? ""}>
-              {folderDisplay}
-            </span>
-          )}
-        </div>
-        <div className="titlebar__right mono">{rows.length > 0 ? `${rows.length} files` : ""}</div>
-      </div>
-
       {/* ——— toolbar ——— */}
       <div className="toolbar">
         <div className="toolbar__group">
