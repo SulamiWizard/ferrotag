@@ -1,137 +1,182 @@
-import { ChevronRight, ChevronDown } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Track } from "@/types/track";
 import { useEffect, useRef, useState } from "react";
+import { TrackRow, EditableTags, MULTI, sharedTagValue } from "@/lib/track-row";
 
-interface MetadataPaneProps {
-  tracks: Track[];
-  albumArt: string | null;
-  onEdit: (field: keyof Track, value: string | undefined) => void;
-  onArtClick: () => void;
+interface TagEditorProps {
+  selRows: TrackRow[];
+  artUrl: string | null;
+  mixedArt: boolean;
+  onEdit: (key: keyof EditableTags, value: string) => void;
+  onArtClick: (currentArtUrl: string | null) => void;
+  onArtDrop: (filePath: string) => void;
   onArtExtract: () => void;
 }
 
-// Returns the shared value for a field across all selected tracks, or null if
-// they differ. null means the input should show a "<keep>" placeholder —
-// typing in it will override all tracks, leaving it alone will preserve each
-// track's individual value.
-// Arrays (artists) are joined with "; " for display and editing.
-function sharedValue(tracks: Track[], field: keyof Track): string | null {
-  if (tracks.length === 0) return "";
-  const values = tracks.map((t) => {
-    const v = t[field];
-    if (Array.isArray(v)) return v.join("; ");
-    return (v as string | undefined) ?? "";
-  });
-  const first = values[0];
-  return values.every((v) => v === first) ? first : null;
+// ——— plain field ———
+
+interface TagFieldDef {
+  key: keyof EditableTags;
+  label: string;
+  narrow?: boolean;
+  mono?: boolean;
+  multiline?: boolean;
 }
 
-// Computes the initial display values for all fields from the current selection.
-function initialFields(tracks: Track[]) {
-  return {
-    title: sharedValue(tracks, "title"),
-    artists: sharedValue(tracks, "artists"),
-    album: sharedValue(tracks, "album"),
-    album_artists: sharedValue(tracks, "album_artists"),
-    year: sharedValue(tracks, "year"),
-    release_date: sharedValue(tracks, "release_date"),
-    recording_date: sharedValue(tracks, "recording_date"),
-    original_release_date: sharedValue(tracks, "original_release_date"),
-    track_number: sharedValue(tracks, "track_number"),
-    disc_number: sharedValue(tracks, "disc_number"),
-    genre: sharedValue(tracks, "genre"),
-    comment: sharedValue(tracks, "comment"),
-    description: sharedValue(tracks, "description"),
-  };
-}
-
-interface ComboInputProps {
-  value: string | null;
-  originalValue: string | null;
-  onChange: (value: string) => void;
-  onKeep: () => void;
-  onBlank: () => void;
-}
-
-// Text input with a dropdown that offers three quick actions:
-//   original value — revert to what was on disk
-//   <keep>         — leave each track's existing value unchanged (removes the field from edits)
-//   <blank>        — explicitly clear the field on save
-// onMouseDown preventDefault on the dropdown buttons prevents the input from
-// losing focus before the click registers.
-function ComboInput({
-  value,
-  originalValue,
+function Field({
+  field,
+  sel,
   onChange,
-  onKeep,
-  onBlank,
-}: ComboInputProps) {
+}: {
+  field: TagFieldDef;
+  sel: TrackRow[];
+  onChange: (key: keyof EditableTags, value: string) => void;
+}) {
+  const val = sharedTagValue(sel, field.key);
+  const isMulti = val === MULTI;
+  const cls = `tf-input${field.mono ? " mono" : ""}${isMulti ? " is-multi" : ""}`;
+  const props = {
+    className: cls,
+    value: isMulti ? "" : val,
+    placeholder: isMulti ? "‹ multiple values ›" : "",
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      onChange(field.key, e.target.value),
+  };
+  return (
+    <label className={`tf${field.narrow ? " tf--narrow" : ""}`}>
+      <span className="tf-label">{field.label}</span>
+      {field.multiline ? <textarea {...props} rows={2} /> : <input {...props} />}
+    </label>
+  );
+}
+
+// ——— expandable group of sub-fields ———
+
+function ExpandGroup({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        className="tf-expand"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className={`tf-expand__arrow${open ? " tf-expand__arrow--open" : ""}`}>▶</span>
+        {label}
+      </button>
+      {open && <div className="tf-sub">{children}</div>}
+    </>
+  );
+}
+
+// ——— album art well ———
+
+function AlbumArt({
+  artUrl,
+  mixedArt,
+  hasSel,
+  onArtClick,
+  onArtDrop,
+  onArtExtract,
+}: {
+  artUrl: string | null;
+  mixedArt: boolean;
+  hasSel: boolean;
+  onArtClick: (current: string | null) => void;
+  onArtDrop: (path: string) => void;
+  onArtExtract: () => void;
+}) {
+  const [drag, setDrag] = useState(false);
+  const [menu, setMenu] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Close the dropdown when the user clicks outside the component.
   useEffect(() => {
-    if (!open) return;
+    if (!menu) return;
     const handler = (e: MouseEvent) => {
-      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+      if (!containerRef.current?.contains(e.target as Node)) setMenu(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  }, [menu]);
+
+  const hasArt = !!artUrl && !mixedArt;
 
   return (
-    <div ref={containerRef} className="relative flex w-full">
-      <Input
-        value={value ?? ""}
-        placeholder={value === null ? "<keep>" : ""}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-7 text-sm rounded-r-none border-r-0"
-      />
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="h-7 px-1.5 border border-input rounded-r-md bg-background hover:bg-muted transition-colors shrink-0"
+    <div className="art" ref={containerRef}>
+      <div
+        className={`art__well${hasArt ? " has-art" : ""}${drag ? " is-drag" : ""}`}
+        onClick={() => hasSel && onArtClick(artUrl)}
+        onContextMenu={(e) => {
+          if (!artUrl) return;
+          e.preventDefault();
+          setMenu(true);
+        }}
+        onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDrag(false);
+          const file = e.dataTransfer.files[0];
+          if (!file) return;
+          const path = (file as unknown as { path?: string }).path;
+          if (path) onArtDrop(path);
+        }}
+        title={
+          hasArt
+            ? "Click to replace · right-click for options"
+            : "Click or drop an image to add cover art"
+        }
       >
-        <ChevronDown className="h-3 w-3 text-muted-foreground" />
-      </button>
-      {open && (
-        <div className="absolute top-full left-0 right-0 z-50 mt-0.5 bg-popover border border-border rounded-md shadow-md overflow-hidden">
-          {originalValue !== null && originalValue !== "" && (
-            <button
-              type="button"
-              className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors truncate"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                onChange(originalValue);
-                setOpen(false);
-              }}
-            >
-              {originalValue}
-            </button>
-          )}
+        {hasArt ? (
+          <>
+            <img className="art__img" src={artUrl} alt="Album art" />
+            <div className="art__vignette" />
+          </>
+        ) : mixedArt ? (
+          <div className="art__mixed">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="9" cy="9" r="1.8" fill="currentColor" />
+              <path d="M5 18l5-5 4 4 2-2 3 3" />
+            </svg>
+            <span className="mono" style={{ fontSize: "11px" }}>multiple covers</span>
+          </div>
+        ) : (
+          <div className="art__drop">
+            <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="9" cy="9" r="1.8" fill="currentColor" />
+              <path d="M5 18l5-5 4 4 2-2 3 3" />
+            </svg>
+            <span className="mono">drop cover art</span>
+            <span className="art__hint mono">JPG · PNG · 1400×1400+</span>
+          </div>
+        )}
+      </div>
+      <div className="art__meta mono">
+        {hasArt ? "embedded" : mixedArt ? "multiple covers" : "no artwork"}
+      </div>
+      {menu && (
+        <div className="art-menu">
           <button
             type="button"
-            className="w-full text-left px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted transition-colors font-mono"
+            className="art-menu__item"
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => {
-              onKeep();
-              setOpen(false);
-            }}
+            onClick={() => { onArtExtract(); setMenu(false); }}
           >
-            &lt;keep&gt;
+            Extract image
           </button>
           <button
             type="button"
-            className="w-full text-left px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted transition-colors font-mono"
+            className="art-menu__item"
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => {
-              onBlank();
-              setOpen(false);
-            }}
+            onClick={() => { onArtClick(artUrl); setMenu(false); }}
           >
-            &lt;blank&gt;
+            Change image
           </button>
         </div>
       )}
@@ -139,341 +184,101 @@ function ComboInput({
   );
 }
 
-// Label + ComboInput as a single reusable field row.
-interface ComboFieldProps {
-  label: string;
-  value: string | null;
-  originalValue: string | null;
-  onChange: (value: string) => void;
-  onKeep: () => void;
-  onBlank: () => void;
-}
+// ——— tag editor ———
 
-function ComboField({
-  label,
-  value,
-  originalValue,
-  onChange,
-  onKeep,
-  onBlank,
-}: ComboFieldProps) {
-  return (
-    <div className="flex flex-col gap-1 w-full">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <ComboInput
-        value={value}
-        originalValue={originalValue}
-        onChange={onChange}
-        onKeep={onKeep}
-        onBlank={onBlank}
-      />
-    </div>
-  );
-}
-
-// A primary ComboField with an expandable section of related sub-fields
-// (e.g. "Year" expands to show TYER, Release Date, Original Release Date).
-interface CollapsibleComboGroupProps {
-  primaryLabel: string;
-  primaryValue: string | null;
-  primaryOriginalValue: string | null;
-  onPrimaryChange: (value: string) => void;
-  onPrimaryKeep: () => void;
-  onPrimaryBlank: () => void;
-  children: React.ReactNode;
-}
-
-function CollapsibleComboGroup({
-  primaryLabel,
-  primaryValue,
-  primaryOriginalValue,
-  onPrimaryChange,
-  onPrimaryKeep,
-  onPrimaryBlank,
-  children,
-}: CollapsibleComboGroupProps) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="flex flex-col gap-1 w-full">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1 w-fit"
-      >
-        <ChevronRight
-          className={`h-3 w-3 text-muted-foreground transition-transform duration-150 ${open ? "rotate-90" : ""}`}
-        />
-        <Label className="text-xs text-muted-foreground cursor-pointer pointer-events-none">
-          {primaryLabel}
-        </Label>
-      </button>
-      <ComboInput
-        value={primaryValue}
-        originalValue={primaryOriginalValue}
-        onChange={onPrimaryChange}
-        onKeep={onPrimaryKeep}
-        onBlank={onPrimaryBlank}
-      />
-      {open && (
-        <div className="flex flex-col gap-3 ml-2 pl-3 border-l border-border mt-1">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default function MetadataPane({
-  tracks,
-  albumArt,
+export default function TagEditor({
+  selRows,
+  artUrl,
+  mixedArt,
   onEdit,
   onArtClick,
+  onArtDrop,
   onArtExtract,
-}: MetadataPaneProps) {
-  // `fields` is the live display state (what's shown in the inputs).
-  // `originals` is a snapshot of values at selection time, used to power the
-  // "revert to original" option in each dropdown. Both reset when tracks changes.
-  const [fields, setFields] = useState(initialFields(tracks));
-  const [originals, setOriginals] = useState(initialFields(tracks));
-
-  useEffect(() => {
-    const init = initialFields(tracks);
-    setFields(init);
-    setOriginals(init);
-  }, [tracks]);
-
-  // Updates the display value and notifies App of the change.
-  const handleChange = (field: keyof typeof fields, value: string) => {
-    setFields((prev) => ({ ...prev, [field]: value }));
-    onEdit(field as keyof Track, value);
-  };
-
-  // Reverts the field to its original value and removes it from the edits map
-  // (so the field won't be written on save).
-  const handleKeep = (field: keyof typeof fields) => {
-    setFields((prev) => ({
-      ...prev,
-      [field]: sharedValue(tracks, field as keyof Track),
-    }));
-    onEdit(field as keyof Track, undefined);
-  };
-
-  // Sets the field to an empty string, which Rust will write as a blank tag.
-  const handleBlank = (field: keyof typeof fields) => {
-    setFields((prev) => ({ ...prev, [field]: "" }));
-    onEdit(field as keyof Track, "");
-  };
-
-  const [artContextMenu, setArtContextMenu] = useState(false);
-  const artContainerRef = useRef<HTMLDivElement>(null);
-
-  // Close the art context menu when clicking outside.
-  useEffect(() => {
-    if (!artContextMenu) return;
-    const handler = (e: MouseEvent) => {
-      if (!artContainerRef.current?.contains(e.target as Node))
-        setArtContextMenu(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [artContextMenu]);
-
-  const firstTrack = tracks[0] ?? null;
-
-  return (
-    <div className="flex flex-col gap-3 p-3 w-full">
-      <ComboField
-        label="Title"
-        value={fields.title}
-        originalValue={originals.title}
-        onChange={(v) => handleChange("title", v)}
-        onKeep={() => handleKeep("title")}
-        onBlank={() => handleBlank("title")}
-      />
-      <ComboField
-        label="Artist"
-        value={fields.artists}
-        originalValue={originals.artists}
-        onChange={(v) => handleChange("artists", v)}
-        onKeep={() => handleKeep("artists")}
-        onBlank={() => handleBlank("artists")}
-      />
-      <ComboField
-        label="Album"
-        value={fields.album}
-        originalValue={originals.album}
-        onChange={(v) => handleChange("album", v)}
-        onKeep={() => handleKeep("album")}
-        onBlank={() => handleBlank("album")}
-      />
-      <ComboField
-        label="Album Artist"
-        value={fields.album_artists}
-        originalValue={originals.album_artists}
-        onChange={(v) => handleChange("album_artists", v)}
-        onKeep={() => handleKeep("album_artists")}
-        onBlank={() => handleBlank("album_artists")}
-      />
-
-      {/* Year expands to expose the three separate date tags that different
-          formats use (TYER for ID3v2.3, TDRC for ID3v2.4, etc.) */}
-      <CollapsibleComboGroup
-        primaryLabel="Year"
-        primaryValue={fields.recording_date}
-        primaryOriginalValue={originals.recording_date}
-        onPrimaryChange={(v) => handleChange("recording_date", v)}
-        onPrimaryKeep={() => handleKeep("recording_date")}
-        onPrimaryBlank={() => handleBlank("recording_date")}
-      >
-        <ComboField
-          label="Year (TYER)"
-          value={fields.year}
-          originalValue={originals.year}
-          onChange={(v) => handleChange("year", v)}
-          onKeep={() => handleKeep("year")}
-          onBlank={() => handleBlank("year")}
-        />
-        <ComboField
-          label="Release Date"
-          value={fields.release_date}
-          originalValue={originals.release_date}
-          onChange={(v) => handleChange("release_date", v)}
-          onKeep={() => handleKeep("release_date")}
-          onBlank={() => handleBlank("release_date")}
-        />
-        <ComboField
-          label="Original Release Date"
-          value={fields.original_release_date}
-          originalValue={originals.original_release_date}
-          onChange={(v) => handleChange("original_release_date", v)}
-          onKeep={() => handleKeep("original_release_date")}
-          onBlank={() => handleBlank("original_release_date")}
-        />
-      </CollapsibleComboGroup>
-
-      <CollapsibleComboGroup
-        primaryLabel="Track"
-        primaryValue={fields.track_number}
-        primaryOriginalValue={originals.track_number}
-        onPrimaryChange={(v) => handleChange("track_number", v)}
-        onPrimaryKeep={() => handleKeep("track_number")}
-        onPrimaryBlank={() => handleBlank("track_number")}
-      >
-        <ComboField
-          label="Disc Number"
-          value={fields.disc_number}
-          originalValue={originals.disc_number}
-          onChange={(v) => handleChange("disc_number", v)}
-          onKeep={() => handleKeep("disc_number")}
-          onBlank={() => handleBlank("disc_number")}
-        />
-      </CollapsibleComboGroup>
-
-      <ComboField
-        label="Genre"
-        value={fields.genre}
-        originalValue={originals.genre}
-        onChange={(v) => handleChange("genre", v)}
-        onKeep={() => handleKeep("genre")}
-        onBlank={() => handleBlank("genre")}
-      />
-
-      <CollapsibleComboGroup
-        primaryLabel="Comment"
-        primaryValue={fields.comment}
-        primaryOriginalValue={originals.comment}
-        onPrimaryChange={(v) => handleChange("comment", v)}
-        onPrimaryKeep={() => handleKeep("comment")}
-        onPrimaryBlank={() => handleBlank("comment")}
-      >
-        <ComboField
-          label="Description"
-          value={fields.description}
-          originalValue={originals.description}
-          onChange={(v) => handleChange("description", v)}
-          onKeep={() => handleKeep("description")}
-          onBlank={() => handleBlank("description")}
-        />
-      </CollapsibleComboGroup>
-
-      {/* Album art — click to replace, right-click to extract to a file.
-          The image is stored as a base64 data URI in App state so it can be
-          previewed immediately without writing to disk. */}
-      <div className="flex flex-col gap-1">
-        <Label className="text-xs text-muted-foreground">Album Art</Label>
-        <div ref={artContainerRef} className="relative w-full max-w-60">
-          <div
-            onClick={tracks.length > 0 ? onArtClick : undefined}
-            onContextMenu={(e) => {
-              if (!albumArt) return;
-              e.preventDefault();
-              setArtContextMenu(true);
-            }}
-            className={`w-full aspect-square bg-muted/50 rounded-lg overflow-hidden flex items-center justify-center border border-border/50 group relative
-              ${tracks.length > 0 ? "cursor-pointer" : ""}`}
-          >
-            {albumArt ? (
-              <img
-                src={albumArt}
-                alt="Album Art"
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <span className="text-xs text-muted-foreground/50 select-none">
-                {tracks.length > 0 ? "Click to add art" : "No art"}
-              </span>
-            )}
-            {tracks.length > 0 && (
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <span className="text-white text-xs font-medium select-none">
-                  Change image
-                </span>
-              </div>
-            )}
-          </div>
-          {artContextMenu && (
-            <div className="absolute top-2 left-2 z-50 bg-popover border border-border rounded-md shadow-md overflow-hidden">
-              <button
-                type="button"
-                className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors whitespace-nowrap"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  onArtExtract();
-                  setArtContextMenu(false);
-                }}
-              >
-                Extract image
-              </button>
-              <button
-                type="button"
-                className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors whitespace-nowrap"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  onArtClick();
-                  setArtContextMenu(false);
-                }}
-              >
-                Change image
-              </button>
-            </div>
-          )}
+}: TagEditorProps) {
+  if (selRows.length === 0) {
+    return (
+      <div className="editor editor--empty">
+        <div className="editor__emptymsg mono">
+          <span className="kbd">↕</span> select a file to edit its tags
         </div>
       </div>
+    );
+  }
 
-      <div className="flex flex-col gap-1">
-        <Label className="text-xs text-muted-foreground">Path</Label>
-        <Input
-          readOnly
-          value={
-            tracks.length === 0
-              ? ""
-              : tracks.length === 1
-                ? firstTrack!.path
-                : `${tracks.length} files selected`
-          }
-          className="h-7 text-sm text-muted-foreground bg-muted"
-        />
+  const batch = selRows.length > 1;
+
+  const f = (key: keyof EditableTags, label: string, opts?: Partial<TagFieldDef>): TagFieldDef =>
+    ({ key, label, ...opts });
+
+  return (
+    <div className="editor">
+      {/* header */}
+      <div className="editor__head">
+        <div className="editor__title">
+          {batch ? (
+            <>
+              <span className="batch-badge">{selRows.length}</span>
+              <span>files selected</span>
+            </>
+          ) : (
+            <span className="ed-filename mono" title={selRows[0].path}>
+              {selRows[0].file}
+            </span>
+          )}
+        </div>
+        {batch && <div className="editor__sub mono">edits apply to all selected</div>}
+      </div>
+
+      {/* scrollable body */}
+      <div className="editor__scroll">
+        {/* album art */}
+        <div className="editor__art-inline">
+          <AlbumArt
+            artUrl={artUrl}
+            mixedArt={mixedArt}
+            hasSel={selRows.length > 0}
+            onArtClick={onArtClick}
+            onArtDrop={onArtDrop}
+            onArtExtract={onArtExtract}
+          />
+        </div>
+
+        {/* ——— Core section ——— */}
+        <div className="tf-section">
+          <div className="tf-section__label">Core</div>
+          <div className="tf-grid">
+            <Field field={f("title",       "Title")}        sel={selRows} onChange={onEdit} />
+            <Field field={f("artist",      "Artist")}       sel={selRows} onChange={onEdit} />
+            <Field field={f("album",       "Album")}        sel={selRows} onChange={onEdit} />
+            <Field field={f("albumArtist", "Album Artist")} sel={selRows} onChange={onEdit} />
+
+            {/* Year + sub-fields */}
+            <Field field={f("year", "Year", { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
+            <Field field={f("genre", "Genre", { narrow: true })}           sel={selRows} onChange={onEdit} />
+
+            <ExpandGroup label="More date fields">
+              <div className="tf-grid">
+                <Field field={f("yearLegacy",          "Year (TYER)",           { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
+                <Field field={f("releaseDate",         "Release Date",          { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
+                <Field field={f("originalReleaseDate", "Original Release Date", { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
+              </div>
+            </ExpandGroup>
+          </div>
+        </div>
+
+        {/* ——— Extended section ——— */}
+        <div className="tf-section">
+          <div className="tf-section__label">Extended</div>
+          <div className="tf-grid">
+            <Field field={f("trackNo", "Track #", { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
+            <Field field={f("discNo",  "Disc #",  { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
+            <Field field={f("comment", "Comment", { multiline: true })}          sel={selRows} onChange={onEdit} />
+
+            <ExpandGroup label="More comment fields">
+              <Field field={f("description", "Description", { multiline: true })} sel={selRows} onChange={onEdit} />
+            </ExpandGroup>
+          </div>
+        </div>
       </div>
     </div>
   );

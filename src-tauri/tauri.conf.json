@@ -13,8 +13,11 @@
     "windows": [
       {
         "title": "ferrotag",
-        "width": 800,
-        "height": 600,
+        "width": 1280,
+        "height": 820,
+        "minWidth": 600,
+        "minHeight": 400,
+        "decorations": false,
         "theme": "Dark"
       }
     ],

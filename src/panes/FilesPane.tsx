@@ -1,199 +1,196 @@
-import { useRef, useState } from "react";
-import { Track } from "@/types/track";
-
-type SortKey = "track_number" | "title" | "artists" | "album" | "year";
-type SortDir = "asc" | "desc";
+import { useRef } from "react";
+import { TrackRow, SortKey, SortDir } from "@/lib/track-row";
 
 interface FilesPaneProps {
-  tracks: Track[];
-  selectedTracks: Track[];
-  onSelect: (tracks: Track[]) => void;
-  onDeselect: () => void;
+  rows: TrackRow[];          // already filtered + sorted by App
+  selectedIds: Set<string>;
+  sort: { key: SortKey; dir: SortDir };
+  search: string;
+  totalCount: number;        // total loaded tracks (before filter)
+  onSort: (key: SortKey, dir: SortDir) => void;
+  onSelect: (ids: Set<string>) => void;
 }
 
-// Track numbers are stored as strings (e.g. "3" or "3/12"). Parse out just the
-// leading number so sorting is numeric rather than lexicographic. Tracks without
-// a number sort to the end.
-function parseTrackNumber(t: Track): number {
-  const n = parseInt(t.track_number ?? "", 10);
-  return isNaN(n) ? Infinity : n;
+// Column definitions — drives both the header and each data row.
+const COLUMNS: {
+  key: string;
+  label: string;
+  w?: number;
+  grow?: number;
+  mono?: boolean;
+  align?: "right";
+  sortKey?: SortKey;
+}[] = [
+  { key: "_status", label: "",       w: 26 },
+  { key: "trackNo", label: "#",      w: 42,  mono: true, align: "right", sortKey: "trackNo" },
+  { key: "title",   label: "Title",  grow: 2.2,           sortKey: "title" },
+  { key: "artist",  label: "Artist", grow: 1.4,           sortKey: "artist" },
+  { key: "album",   label: "Album",  grow: 1.6,           sortKey: "album" },
+  { key: "genre",   label: "Genre",  grow: 1 },
+  { key: "fmt",     label: "Type",   w: 56,  mono: true,  sortKey: "fmt" },
+];
+
+const GRID_COLS = COLUMNS.map((c) =>
+  c.w ? `${c.w}px` : `minmax(0, ${c.grow}fr)`,
+).join(" ");
+
+function CoverThumb({ artUrl, size = 18 }: { artUrl: string | null | undefined; size?: number }) {
+  if (artUrl) {
+    return (
+      <img
+        className="cover-mini cover-mini--img"
+        src={artUrl}
+        alt=""
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+  return (
+    <div className="cover-mini cover-mini--empty" style={{ width: size, height: size }}>
+      <svg viewBox="0 0 24 24" width={size * 0.62} height={size * 0.62} aria-hidden="true">
+        <path
+          d="M9 18V6l10-2v12"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <circle cx="7" cy="18" r="2.4" fill="currentColor" />
+        <circle cx="17" cy="16" r="2.4" fill="currentColor" />
+      </svg>
+    </div>
+  );
 }
 
-// Returns a sorted copy of the array — never mutates the original.
-function sortedBy(tracks: Track[], key: SortKey, dir: SortDir): Track[] {
-  return [...tracks].sort((a, b) => {
-    let cmp = 0;
-    switch (key) {
-      case "track_number":
-        cmp = parseTrackNumber(a) - parseTrackNumber(b);
-        break;
-      case "title":
-        cmp = (a.title ?? "").localeCompare(b.title ?? "");
-        break;
-      case "artists":
-        cmp = (a.artists[0] ?? "").localeCompare(b.artists[0] ?? "");
-        break;
-      case "album":
-        cmp = (a.album ?? "").localeCompare(b.album ?? "");
-        break;
-      case "year":
-        cmp = (a.recording_date ?? a.year ?? "").localeCompare(
-          b.recording_date ?? b.year ?? "",
-        );
-        break;
-    }
-    return dir === "asc" ? cmp : -cmp;
-  });
-}
+export default function FilesPane({ rows, selectedIds, sort, search, totalCount, onSort, onSelect }: FilesPaneProps) {
+  const lastClickRef = useRef<string | null>(null);
 
-// Shared grid template used by both the header row and every track row so
-// columns always line up.
-const COLS = "grid-cols-[0.5fr_2fr_2fr_2fr_1fr]";
-
-export default function FilesPane({
-  tracks,
-  selectedTracks,
-  onSelect,
-  onDeselect,
-}: FilesPaneProps) {
-  // useRef persists the last-clicked index across renders without causing a
-  // re-render itself — only needed for shift-click range selection.
-  const lastClickedIndex = useRef<number>(-1);
-  const selectedPaths = new Set(selectedTracks.map((t) => t.path));
-
-  // Sort state is local to this component — it's purely a display concern and
-  // doesn't affect what gets saved.
-  const [sortKey, setSortKey] = useState<SortKey>("track_number");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
-
-  const displayedTracks = sortedBy(tracks, sortKey, sortDir);
-
-  // Clicking the active column header flips direction; clicking a different
-  // column switches to it with ascending order.
-  const handleHeaderClick = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+  function handleHeaderSort(key: SortKey) {
+    if (sort.key === key) {
+      onSort(key, sort.dir === "asc" ? "desc" : "asc");
     } else {
-      setSortKey(key);
-      setSortDir("asc");
+      onSort(key, "asc");
     }
-  };
+  }
 
-  // Handles three selection modes:
-  //   Ctrl/Cmd+click — toggle individual track in/out of selection
-  //   Shift+click    — select a contiguous range from the last clicked row
-  //   Plain click    — select only this track (click again to deselect)
-  // Range selection uses displayedTracks (not the original tracks prop) so the
-  // range matches what the user sees after sorting.
-  const handleTrackClick = (
-    track: Track,
-    index: number,
-    e: React.MouseEvent,
-  ) => {
-    e.stopPropagation();
-
-    if (e.ctrlKey || e.metaKey) {
-      if (selectedPaths.has(track.path)) {
-        onSelect(selectedTracks.filter((t) => t.path !== track.path));
-      } else {
-        onSelect([...selectedTracks, track]);
-      }
-      lastClickedIndex.current = index;
-    } else if (e.shiftKey && lastClickedIndex.current !== -1) {
-      const start = Math.min(lastClickedIndex.current, index);
-      const end = Math.max(lastClickedIndex.current, index);
-      onSelect(displayedTracks.slice(start, end + 1));
+  function handleRowClick(e: React.MouseEvent, idx: number, id: string) {
+    const ids = rows.map((r) => r.id);
+    if (e.shiftKey && lastClickRef.current != null) {
+      const a = ids.indexOf(lastClickRef.current);
+      const [lo, hi] = a < idx ? [a, idx] : [idx, a];
+      onSelect(new Set(ids.slice(lo, hi + 1)));
+    } else if (e.metaKey || e.ctrlKey) {
+      const next = new Set(selectedIds);
+      next.has(id) ? next.delete(id) : next.add(id);
+      onSelect(next);
+      lastClickRef.current = id;
     } else {
-      const isOnlySelected =
-        selectedTracks.length === 1 && selectedPaths.has(track.path);
-      if (isOnlySelected) {
-        onDeselect();
-      } else {
-        onSelect([track]);
-      }
-      lastClickedIndex.current = index;
+      onSelect(new Set([id]));
+      lastClickRef.current = id;
     }
-  };
+  }
 
-  // Only renders an indicator for the currently active sort column.
-  const SortIndicator = ({ col }: { col: SortKey }) =>
-    sortKey === col ? (
-      <span className="ml-1">{sortDir === "asc" ? "▲" : "▼"}</span>
-    ) : null;
+  function selectAll() {
+    onSelect(new Set(rows.map((r) => r.id)));
+  }
 
-  const headerCls =
-    "flex items-center gap-0.5 cursor-pointer select-none hover:text-foreground transition-colors";
+  if (totalCount === 0) {
+    return (
+      <div className="filelist">
+        <div className="filelist__drop">
+          <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          </svg>
+          <span>Drop audio files or folders here, or click Open</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Sticky column headers — clicking any column sorts by it */}
-      <div
-        className={`grid ${COLS} border-b px-4 py-2 bg-muted/50 text-[11px] font-semibold tracking-wider uppercase text-muted-foreground`}
-      >
-        <button
-          className={headerCls}
-          onClick={() => handleHeaderClick("track_number")}
-        >
-          #<SortIndicator col="track_number" />
-        </button>
-        <button
-          className={headerCls}
-          onClick={() => handleHeaderClick("title")}
-        >
-          Title<SortIndicator col="title" />
-        </button>
-        <button
-          className={headerCls}
-          onClick={() => handleHeaderClick("artists")}
-        >
-          Artist<SortIndicator col="artists" />
-        </button>
-        <button
-          className={headerCls}
-          onClick={() => handleHeaderClick("album")}
-        >
-          Album<SortIndicator col="album" />
-        </button>
-        <button className={headerCls} onClick={() => handleHeaderClick("year")}>
-          Year<SortIndicator col="year" />
-        </button>
+    <div className="filelist">
+      {/* ——— header row ——— */}
+      <div className="filelist__head" style={{ gridTemplateColumns: GRID_COLS }}>
+        {COLUMNS.map((col) => {
+          const isActive = col.sortKey && sort.key === col.sortKey;
+          return (
+            <div
+              key={col.key}
+              className={`fl-th ${col.align === "right" ? "fl-th--r" : ""} ${col.sortKey ? "fl-th--sortable" : ""}`}
+              onClick={() => col.sortKey && handleHeaderSort(col.sortKey)}
+            >
+              {col.key === "_status" ? (
+                <button
+                  className="selall"
+                  title="Select all"
+                  onClick={(e) => { e.stopPropagation(); selectAll(); }}
+                />
+              ) : (
+                <span>{col.label}</span>
+              )}
+              {isActive && (
+                <span className="fl-th__arrow">{sort.dir === "asc" ? "▲" : "▼"}</span>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      {/* Clicking the background (not a row) fires onDeselect via the outer div */}
-      <div className="flex-1 min-h-0 overflow-y-auto" onClick={onDeselect}>
-        {tracks.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-muted-foreground/60 text-sm select-none">
-            Drop audio files here
-          </div>
+      {/* ——— rows ——— */}
+      <div className="filelist__body" role="listbox" aria-multiselectable="true">
+        {rows.length === 0 ? (
+          <div className="filelist__empty">No files match "{search}".</div>
         ) : (
-          displayedTracks.map((track, index) => {
-            const isSelected = selectedPaths.has(track.path);
+          rows.map((row, idx) => {
+            const isSel = selectedIds.has(row.id);
+            const untagged = !row.tags.title;
             return (
               <div
-                key={track.path}
-                onClick={(e) => handleTrackClick(track, index, e)}
-                className={`grid ${COLS} px-4 py-2 text-sm border-b border-border/50 cursor-pointer transition-colors duration-100
-                  ${
-                    isSelected
-                      ? "bg-accent border-l-2 border-l-primary pl-3.5"
-                      : "hover:bg-muted/60"
-                  }`}
+                key={row.id}
+                className={`fl-row ${isSel ? "is-sel" : ""} ${untagged ? "is-untagged" : ""}`}
+                style={{ gridTemplateColumns: GRID_COLS }}
+                onClick={(e) => handleRowClick(e, idx, row.id)}
+                role="option"
+                aria-selected={isSel}
               >
-                <span className="truncate text-muted-foreground tabular-nums">
-                  {track.track_number ?? ""}
-                </span>
-                <span className="truncate font-medium">
-                  {track.title ?? "Unknown"}
-                </span>
-                <span className="truncate text-muted-foreground">
-                  {track.artists.join("; ")}
-                </span>
-                <span className="truncate text-muted-foreground">
-                  {track.album ?? "Unknown"}
-                </span>
-                <span className="truncate text-muted-foreground tabular-nums">
-                  {track.recording_date ?? track.year ?? ""}
-                </span>
+                {/* status dot */}
+                <div className="fl-td fl-td--status">
+                  {row.modified || row.pendingArtPath ? (
+                    <span className="dot dot--mod" title="Unsaved changes" />
+                  ) : untagged ? (
+                    <span className="dot dot--warn" title="Missing tags" />
+                  ) : (
+                    <span className="dot dot--ok" />
+                  )}
+                </div>
+                {/* track # */}
+                <div className="fl-td fl-td--r mono dim">
+                  {row.tags.trackNo || <span className="ph">—</span>}
+                </div>
+                {/* title + cover thumb */}
+                <div className="fl-td fl-td--title">
+                  <CoverThumb artUrl={row.artUrl} />
+                  <span className={untagged ? "muted-italic" : ""} style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {row.tags.title || row.file}
+                  </span>
+                </div>
+                {/* artist */}
+                <div className="fl-td">
+                  {row.tags.artist || <span className="ph">—</span>}
+                </div>
+                {/* album */}
+                <div className="fl-td dim">
+                  {row.tags.album || <span className="ph">—</span>}
+                </div>
+                {/* genre */}
+                <div className="fl-td dim">
+                  {row.tags.genre || <span className="ph">—</span>}
+                </div>
+                {/* format chip */}
+                <div className="fl-td mono">
+                  <span className={`fmt-chip fmt-${row.fmt.toLowerCase()}`}>{row.fmt}</span>
+                </div>
               </div>
             );
           })
