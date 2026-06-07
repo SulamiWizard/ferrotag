@@ -52,6 +52,7 @@ pub fn run() {
             commands::art::remove_album_art,
             commands::art::extract_album_art,
             commands::tags::save_track,
+            commands::rename::rename_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

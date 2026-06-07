@@ -23,12 +23,14 @@ import {
   isTagsDirty,
   EditableTags,
 } from "@/lib/track-row";
+import { applyRenamePattern } from "@/lib/rename-pattern";
 
 interface DragDropPayload {
   paths: string[];
 }
 
 const ART_EXTENSIONS = ["jpg", "jpeg", "png", "gif", "webp", "bmp"];
+const AUDIO_EXTENSIONS = ["mp3", "flac", "ogg", "m4a", "wav", "aiff", "ape", "opus", "wv"];
 
 function Icon({ d, size = 16 }: { d: React.ReactNode; size?: number }) {
   return (
@@ -49,6 +51,12 @@ function Icon({ d, size = 16 }: { d: React.ReactNode; size?: number }) {
 
 const ICONS = {
   folder: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />,
+  file: (
+    <>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+    </>
+  ),
   save: (
     <>
       <path d="M5 4h11l3 3v13H5z" />
@@ -76,6 +84,7 @@ export default function App() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "trackNo", dir: "asc" });
   const [search, setSearch] = useState("");
+  const [renamePattern, setRenamePattern] = useState("");
 
   const displayed = useMemo(() => {
     let r = rows;
@@ -166,6 +175,9 @@ export default function App() {
   const handleSave = useCallback(async () => {
     const dirty = rows.filter((r) => r.modified || r.pendingArtPath || r.pendingArtRemove);
     if (dirty.length === 0) return;
+
+    const pathUpdates = new Map<string, string>(); // oldId -> newPath
+
     for (const row of dirty) {
       const changes = buildSaveChanges(row.tags, row.orig);
       if (Object.keys(changes).length > 0) {
@@ -176,15 +188,54 @@ export default function App() {
       } else if (row.pendingArtPath) {
         await invoke("set_album_art", { audioPaths: [row.path], imagePath: row.pendingArtPath });
       }
+
+      if (renamePattern.trim()) {
+        const newFilename = applyRenamePattern(renamePattern, row.tags, row.path);
+        const sep = row.path.includes("/") ? "/" : "\\";
+        const lastSep = Math.max(row.path.lastIndexOf("/"), row.path.lastIndexOf("\\"));
+        const dir = lastSep >= 0 ? row.path.slice(0, lastSep + 1) : "";
+        const newPath = dir + newFilename;
+        if (newPath !== row.path) {
+          try {
+            await invoke("rename_file", { from: row.path, to: newPath });
+            pathUpdates.set(row.id, newPath);
+          } catch {
+            // Skip rename on conflict; tags are already saved
+            void sep;
+          }
+        }
+      }
     }
+
     setRows((prev) =>
-      prev.map((r) =>
-        r.modified || r.pendingArtPath || r.pendingArtRemove
-          ? { ...r, orig: { ...r.tags }, modified: false, pendingArtPath: null, pendingArtRemove: false }
-          : r,
-      ),
+      prev.map((r) => {
+        if (!r.modified && !r.pendingArtPath && !r.pendingArtRemove) return r;
+        const newPath = pathUpdates.get(r.id);
+        const base = {
+          ...r,
+          orig: { ...r.tags },
+          modified: false,
+          pendingArtPath: null,
+          pendingArtRemove: false,
+        };
+        if (!newPath) return base;
+        return {
+          ...base,
+          id: newPath,
+          path: newPath,
+          file: newPath.split(/[/\\]/).pop() ?? newPath,
+        };
+      }),
     );
-  }, [rows]);
+
+    if (pathUpdates.size > 0) {
+      setSelectedIds((prev) => {
+        const next = new Set<string>();
+        for (const id of prev) next.add(pathUpdates.get(id) ?? id);
+        return next;
+      });
+    }
+  }, [rows, renamePattern]);
 
   // Revert all dirty rows to their orig snapshot.
   const handleRevert = useCallback(() => {
@@ -202,6 +253,19 @@ export default function App() {
     const dir = await open({ directory: true, multiple: false });
     if (!dir || typeof dir !== "string") return;
     const tracks = await invoke<Track[]>("load_tracks", { paths: [dir] });
+    await loadTracks(tracks);
+  };
+
+  // Open individual audio files via dialog.
+  const handleOpenFiles = async () => {
+    const selected = await open({
+      multiple: true,
+      filters: [{ name: "Audio", extensions: AUDIO_EXTENSIONS }],
+    });
+    if (!selected) return;
+    const paths = Array.isArray(selected) ? selected : [selected];
+    if (paths.length === 0) return;
+    const tracks = await invoke<Track[]>("load_tracks", { paths });
     await loadTracks(tracks);
   };
 
@@ -358,9 +422,13 @@ export default function App() {
       {/* ——— toolbar ——— */}
       <div className="toolbar">
         <div className="toolbar__group">
+          <button className="tbtn" onClick={handleOpenFiles}>
+            <Icon d={ICONS.file} />
+            <span>Files…</span>
+          </button>
           <button className="tbtn" onClick={handleOpen}>
             <Icon d={ICONS.folder} />
-            <span>Open</span>
+            <span>Folder…</span>
           </button>
           <button
             className="tbtn tbtn--primary"
@@ -380,6 +448,26 @@ export default function App() {
           </button>
         </div>
         <div className="toolbar__spacer" />
+        <div className="toolbar__group">
+          <div className="rename-bar">
+            <span className="rename-bar__label">Rename:</span>
+            <div className={`rename-bar__input-wrap${renamePattern ? " rename-bar__input-wrap--active" : ""}`}>
+              <input
+                className="rename-bar__input"
+                placeholder="{artist} – {track_number} – {title}"
+                value={renamePattern}
+                title="Rename files on save. Tokens: {title} {artist} {album} {album_artist} {track_number} {disc_number} {year} {genre} {composer} {bpm}. Leave empty to skip renaming."
+                onChange={(e) => setRenamePattern(e.target.value)}
+              />
+              {renamePattern && (
+                <button className="searchbox__clear" onClick={() => setRenamePattern("")}>
+                  <Icon d={ICONS.x} size={12} />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="toolbar__sep" />
         <div className="toolbar__group">
           <div className="searchbox">
             <Icon d={ICONS.search} size={14} />
@@ -445,6 +533,15 @@ export default function App() {
           <span>{selectedIds.size} files selected</span>
         )}
         <div style={{ flex: 1 }} />
+        {renamePattern.trim() && selRows.length === 1 && (
+          <>
+            <span className="dim">→</span>
+            <span className="sb-rename">
+              {applyRenamePattern(renamePattern, selRows[0].tags, selRows[0].path)}
+            </span>
+            <span className="sb-sep" />
+          </>
+        )}
         {dirtyCount > 0 ? (
           <span className="sb-dirty">● {dirtyCount} unsaved</span>
         ) : (

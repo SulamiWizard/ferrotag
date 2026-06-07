@@ -15,8 +15,12 @@ pub fn save_track(path: String, changes: HashMap<String, serde_json::Value>) -> 
         .map_err(|e| e.to_string())?;
 
     // primary_tag_mut() returns the main tag for the format (ID3v2 for MP3,
-    // VorbisComments for FLAC, etc.). If a file has no tag at all this will fail.
-    let tag = tagged_file.primary_tag_mut().ok_or("No tag found")?;
+    // VorbisComments for FLAC, etc.). If the file has no tag yet, create one.
+    if tagged_file.primary_tag().is_none() {
+        let tag_type = tagged_file.primary_tag_type();
+        tagged_file.insert_tag(lofty::tag::Tag::new(tag_type));
+    }
+    let tag = tagged_file.primary_tag_mut().ok_or("Failed to initialize tag")?;
 
     for (field, value) in changes {
         match field.as_str() {

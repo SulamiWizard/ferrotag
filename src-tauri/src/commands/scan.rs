@@ -5,7 +5,7 @@ use walkdir::WalkDir;
 fn is_audio_file(path: &Path) -> bool {
     matches!(
         path.extension().and_then(|e| e.to_str()),
-        Some("mp3" | "flac" | "ogg" | "m4a" | "wav" | "aiff")
+        Some("mp3" | "flac" | "ogg" | "m4a" | "wav" | "aiff" | "ape" | "opus" | "wv")
     )
 }
 

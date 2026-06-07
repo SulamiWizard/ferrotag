@@ -1,66 +1,120 @@
 # Ferrotag
 
-A desktop music metadata editor built with Tauri, React, and Rust.
+A fast, minimal desktop music tag editor built with Tauri, React, and Rust.
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ## Features
 
-- Drag and drop audio files or folders to load tracks
-- View and edit track metadata: title, artist, album, year, track number, disc number, genre, and comments
-- Album art display
-- Supports MP3, FLAC, OGG, M4A, WAV, and AIFF
-- Resizable split-panel interface
-- Recursive directory scanning
+- Edit tags for MP3, FLAC, OGG, M4A, WAV, AIFF, APE, Opus, and WavPack files
+- Open individual files or entire folders via the file picker, or drag and drop either onto the window
+- Batch edit — select multiple tracks and update shared fields at once
+- Album art — embed, replace, extract, or remove cover art
+- File renamer — optionally rename files on save using tag-based patterns like `{artist} – {track_number} – {title}`
+- Extended tag support: credits, sort fields, dates, BPM, comments, and more
+- Resizable split-panel interface with recursive folder scanning
+- Keyboard shortcuts: `Ctrl+S` save, `Ctrl+A` select all, `↑ ↓` navigate
+
+## Supported Formats
+
+| Format | Extension |
+|--------|-----------|
+| MP3 | `.mp3` |
+| FLAC | `.flac` |
+| OGG Vorbis | `.ogg` |
+| MPEG-4 Audio | `.m4a` |
+| WAV | `.wav` |
+| AIFF | `.aiff` |
+| Monkey's Audio | `.ape` |
+| Opus | `.opus` |
+| WavPack | `.wv` |
+
+## Rename Patterns
+
+Type a pattern in the **Rename:** toolbar field to rename files on save. Leave it empty to skip renaming.
+
+Available tokens:
+
+| Token | Value |
+|-------|-------|
+| `{title}` | Track title |
+| `{artist}` | First artist |
+| `{album}` | Album name |
+| `{album_artist}` | First album artist |
+| `{track_number}` | Track number, zero-padded to 2 digits |
+| `{disc_number}` | Disc number, zero-padded to 2 digits |
+| `{year}` | Year |
+| `{genre}` | Genre |
+| `{composer}` | Composer |
+| `{bpm}` | BPM |
+
+Example: `{track_number} – {title}` → `03 – Blue in Green.flac`
+
+The original file extension is always preserved. Characters illegal in filenames are stripped automatically.
 
 ## Tech Stack
 
-| Layer    | Tools                                    |
-| -------- | ---------------------------------------- |
+| Layer | Tools |
+|-------|-------|
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS |
-| Backend  | Rust, Tauri 2, Lofty                     |
-| Bundler  | Bun                                      |
+| Backend | Rust, Tauri 2, Lofty |
+| Bundler | Bun |
 
 ## Prerequisites
 
-- [Rust](https://rustup.rs/) (stable toolchain)
+- [Rust](https://rustup.rs/) stable toolchain
 - [Bun](https://bun.sh/)
-- Tauri system dependencies for your platform — see the [Tauri prerequisites guide](https://v2.tauri.app/start/prerequisites/)
+- Platform system dependencies — see the [Tauri prerequisites guide](https://v2.tauri.app/start/prerequisites/)
+
+**Linux only:** for Wayland support, ensure `libwayland-dev` and `libwebkit2gtk-4.1-dev` are installed. The app auto-detects Wayland or X11 at runtime based on your session — no flags needed.
 
 ## Getting Started
 
 ```bash
-# Install frontend dependencies
 bun install
-
-# Start the development app (Rust + Vite)
 bun run tauri dev
 ```
 
 ## Build
 
 ```bash
-# Bundle a production desktop application
 bun run tauri build
 ```
 
-The output installer/binary will be in `src-tauri/target/release/bundle/`.
+Output is in `src-tauri/target/release/bundle/`.
+
+## Platform Builds
+
+Ferrotag uses GitHub Actions to build for all platforms. Pushing a version tag triggers a release:
+
+```bash
+git tag v1.0.0
+git push --tags
+```
+
+| Platform | Output |
+|----------|--------|
+| Linux | `.deb`, `.rpm`, `.AppImage` |
+| macOS (Apple Silicon) | `.dmg` |
+| macOS (Intel) | `.dmg` |
+| Windows | `.msi`, `.exe` |
 
 ## Project Structure
 
 ```
 ferrotag/
-├── src/                  # React/TypeScript frontend
-│   ├── App.tsx           # Root component, drag-drop and save logic
+├── src/                        # React/TypeScript frontend
+│   ├── App.tsx                 # Root component, state, save/rename logic
 │   ├── panes/
-│   │   ├── MetadataPane.tsx   # Tag editor and album art
-│   │   └── FilesPane.tsx      # Track list
-│   ├── types/track.ts    # Shared Track type
-│   └── lib/tauri.ts      # Tauri command wrappers
-└── src-tauri/            # Rust backend
+│   │   ├── FilesPane.tsx       # Track list
+│   │   └── MetadataPane.tsx    # Tag editor and album art
+│   └── lib/
+│       ├── track-row.ts        # Row model and dirty tracking
+│       └── rename-pattern.ts   # File rename pattern resolver
+└── src-tauri/                  # Rust backend
     └── src/
-        ├── commands/     # Tauri commands (scan, save, art)
-        └── metadata/     # Tag reading and TrackMetadata struct
+        ├── commands/           # Tauri commands (scan, tags, art, rename)
+        └── metadata/           # Tag reading and TrackMetadata struct
 ```
 
 ## License
