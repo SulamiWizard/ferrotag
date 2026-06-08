@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import "./App.css";
 
@@ -85,6 +85,7 @@ export default function App() {
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "trackNo", dir: "asc" });
   const [search, setSearch] = useState("");
   const [renamePattern, setRenamePattern] = useState("");
+  const [scrollToId, setScrollToId] = useState<string | null>(null);
 
   const displayed = useMemo(() => {
     let r = rows;
@@ -99,37 +100,29 @@ export default function App() {
     return sortedRows(r, sort.key, sort.dir);
   }, [rows, sort, search]);
 
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+
   const selRows = useMemo(() => rows.filter((r) => selectedIds.has(r.id)), [rows, selectedIds]);
   const dirtyCount = useMemo(() => rows.filter((r) => r.modified || r.pendingArtPath || r.pendingArtRemove).length, [rows]);
 
-  const loadAllArtRef = useRef<AbortController | null>(null);
-
-  const loadAllArt = useCallback(async (newRows: TrackRow[]) => {
-    loadAllArtRef.current?.abort();
-    const controller = new AbortController();
-    loadAllArtRef.current = controller;
-
-    const BATCH = 8;
-    for (let i = 0; i < newRows.length; i += BATCH) {
-      if (controller.signal.aborted) break;
-      const batch = newRows.slice(i, i + BATCH);
-      const results = await Promise.all(
-        batch.map((r) => invoke<string | null>("load_album_art", { path: r.path })),
-      );
-      if (controller.signal.aborted) break;
-      const updates = new Map(batch.map((r, j) => [r.id, results[j]]));
-      setRows((prev) =>
-        prev.map((row) => (updates.has(row.id) ? { ...row, artUrl: updates.get(row.id) ?? null } : row)),
-      );
-    }
-  }, []);
-
-  const loadTracks = useCallback(async (tracks: Track[]) => {
-    const newRows = tracks.map(trackToRow);
-    setRows(newRows);
+  // Streams tracks from Rust via a Channel, rendering each batch of 25 as it
+  // arrives. Art is not pre-loaded here — it loads lazily on selection.
+  const openTracks = useCallback(async (paths: string[]) => {
+    setRows([]);
     setSelectedIds(new Set());
-    loadAllArt(newRows);
-  }, [loadAllArt]);
+
+    const accumulated: TrackRow[] = [];
+    const channel = new Channel<Track[]>();
+
+    channel.onmessage = (batch) => {
+      const newRows = batch.map(trackToRow);
+      accumulated.push(...newRows);
+      setRows([...accumulated]);
+    };
+
+    await invoke("load_tracks", { onBatch: channel, paths });
+  }, []);
 
   // Update a tag field on all selected rows and recompute their dirty flag.
   const applyEdit = useCallback((key: keyof EditableTags, value: string) => {
@@ -142,15 +135,11 @@ export default function App() {
     );
   }, [selectedIds]);
 
-  // Priority-load art for any selected rows that the background loader hasn't reached yet.
+  // Load art for selected rows that haven't been fetched yet.
   const loadArtForIds = useCallback(async (ids: Set<string>) => {
-    const toLoad: string[] = [];
-    setRows((prev) => {
-      for (const row of prev) {
-        if (ids.has(row.id) && row.artUrl === undefined) toLoad.push(row.id);
-      }
-      return prev;
-    });
+    const toLoad = rowsRef.current
+      .filter((row) => ids.has(row.id) && row.artUrl === undefined)
+      .map((row) => row.id);
     if (toLoad.length === 0) return;
     const results = await Promise.all(
       toLoad.map((id) => invoke<string | null>("load_album_art", { path: id })),
@@ -252,8 +241,7 @@ export default function App() {
   const handleOpen = async () => {
     const dir = await open({ directory: true, multiple: false });
     if (!dir || typeof dir !== "string") return;
-    const tracks = await invoke<Track[]>("load_tracks", { paths: [dir] });
-    await loadTracks(tracks);
+    await openTracks([dir]);
   };
 
   // Open individual audio files via dialog.
@@ -265,8 +253,7 @@ export default function App() {
     if (!selected) return;
     const paths = Array.isArray(selected) ? selected : [selected];
     if (paths.length === 0) return;
-    const tracks = await invoke<Track[]>("load_tracks", { paths });
-    await loadTracks(tracks);
+    await openTracks(paths);
   };
 
   // Stage new album art from a file picker for all selected tracks.
@@ -335,11 +322,13 @@ export default function App() {
     await invoke("extract_album_art", { audioPath: selRows[0].path, destPath });
   };
 
-  // Stable refs so menu event listeners (registered once) always call the latest handler.
+  // Stable refs so event listeners (registered once) always call the latest handler.
   const handleSaveRef = useRef(handleSave);
   handleSaveRef.current = handleSave;
   const handleOpenRef = useRef(handleOpen);
   handleOpenRef.current = handleOpen;
+  const handleArtDropRef = useRef(handleArtDrop);
+  handleArtDropRef.current = handleArtDrop;
   const displayedRef = useRef(displayed);
   displayedRef.current = displayed;
 
@@ -356,6 +345,7 @@ export default function App() {
           if (next !== idx) {
             const newIds = new Set([displayed[next].id]);
             setSelectedIds(newIds);
+            setScrollToId(displayed[next].id);
             loadArtForIds(newIds);
           }
         },
@@ -369,6 +359,7 @@ export default function App() {
           if (next !== idx) {
             const newIds = new Set([displayed[next].id]);
             setSelectedIds(newIds);
+            setScrollToId(displayed[next].id);
             loadArtForIds(newIds);
           }
         },
@@ -385,15 +376,25 @@ export default function App() {
     ),
   );
 
-  // Tauri drag-drop for audio files onto the window.
+  // Global Tauri drag-drop handler. Routes drops to openTracks or handleArtDrop.
+  // Anything that isn't a recognised image extension (including directories and
+  // audio files) is forwarded to openTracks; the backend handles walking dirs.
+  // Only when every dropped path is an image is it treated as an art drop.
   useEffect(() => {
+    const imageExts = new Set(ART_EXTENSIONS);
+    const isImage = (p: string) => imageExts.has(p.split(".").pop()?.toLowerCase() ?? "");
     const unlisten = listen<DragDropPayload>("tauri://drag-drop", async (event) => {
       const paths = event.payload.paths;
-      const tracks = await invoke<Track[]>("load_tracks", { paths });
-      await loadTracks(tracks);
+      const nonImagePaths = paths.filter((p) => !isImage(p));
+      if (nonImagePaths.length > 0) {
+        await openTracks(nonImagePaths);
+      } else {
+        const imagePath = paths.find(isImage);
+        if (imagePath) await handleArtDropRef.current(imagePath);
+      }
     });
     return () => { unlisten.then((f) => f()); };
-  }, [loadTracks]);
+  }, [openTracks]);
 
   // Native menu bar events emitted from Rust via app.emit().
   useEffect(() => {
@@ -404,7 +405,6 @@ export default function App() {
         setSelectedIds(new Set(displayedRef.current.map((r) => r.id)));
       }),
       listen("menu-clear", () => {
-        loadAllArtRef.current?.abort();
         setRows([]);
         setSelectedIds(new Set());
       }),
@@ -498,6 +498,7 @@ export default function App() {
             sort={sort}
             search={search}
             totalCount={rows.length}
+            scrollToId={scrollToId}
             onSort={(key, dir) => setSort({ key, dir })}
             onSelect={handleSelect}
           />
@@ -512,7 +513,6 @@ export default function App() {
             mixedArt={mixedArt}
             onEdit={applyEdit}
             onArtClick={handleArtClick}
-            onArtDrop={handleArtDrop}
             onArtExtract={handleArtExtract}
             onArtRemove={handleArtRemove}
           />

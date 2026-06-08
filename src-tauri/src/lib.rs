@@ -47,6 +47,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::scan::load_tracks,
             commands::art::load_album_art,
+            commands::art::load_all_album_art,
             commands::art::read_image,
             commands::art::set_album_art,
             commands::art::remove_album_art,

@@ -2,6 +2,8 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use lofty::picture::{MimeType, Picture, PictureType};
 use lofty::prelude::*;
 use lofty::probe::Probe;
+use rayon::prelude::*;
+use std::collections::HashMap;
 
 use crate::metadata::track::get_album_art;
 
@@ -10,6 +12,17 @@ use crate::metadata::track::get_album_art;
 #[tauri::command]
 pub fn load_album_art(path: String) -> Option<String> {
     get_album_art(&path)
+}
+
+// Reads album art for all given paths in parallel. Returns a map of
+// path → data URI (or null if the file has no embedded art).
+// Replaces the old batched per-track calls from the frontend.
+#[tauri::command]
+pub fn load_all_album_art(paths: Vec<String>) -> HashMap<String, Option<String>> {
+    paths
+        .par_iter()
+        .map(|path| (path.clone(), get_album_art(path)))
+        .collect()
 }
 
 // Reads an image file from disk and returns it as a base64 data URI.

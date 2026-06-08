@@ -7,7 +7,6 @@ interface TagEditorProps {
   mixedArt: boolean;
   onEdit: (key: keyof EditableTags, value: string) => void;
   onArtClick: (currentArtUrl: string | null) => void;
-  onArtDrop: (filePath: string) => void;
   onArtExtract: () => void;
   onArtRemove: () => void;
 }
@@ -81,7 +80,6 @@ function AlbumArt({
   mixedArt,
   hasSel,
   onArtClick,
-  onArtDrop,
   onArtExtract,
   onArtRemove,
 }: {
@@ -89,7 +87,6 @@ function AlbumArt({
   mixedArt: boolean;
   hasSel: boolean;
   onArtClick: (current: string | null) => void;
-  onArtDrop: (path: string) => void;
   onArtExtract: () => void;
   onArtRemove: () => void;
 }) {
@@ -123,10 +120,8 @@ function AlbumArt({
         onDrop={(e) => {
           e.preventDefault();
           setDrag(false);
-          const file = e.dataTransfer.files[0];
-          if (!file) return;
-          const path = (file as unknown as { path?: string }).path;
-          if (path) onArtDrop(path);
+          // File path resolution is handled by the global tauri://drag-drop
+          // listener in App.tsx — the Web File API doesn't expose paths in Tauri.
         }}
         title={
           hasArt
@@ -203,7 +198,6 @@ export default function TagEditor({
   mixedArt,
   onEdit,
   onArtClick,
-  onArtDrop,
   onArtExtract,
   onArtRemove,
 }: TagEditorProps) {
@@ -250,7 +244,6 @@ export default function TagEditor({
             mixedArt={mixedArt}
             hasSel={selRows.length > 0}
             onArtClick={onArtClick}
-            onArtDrop={onArtDrop}
             onArtExtract={onArtExtract}
             onArtRemove={onArtRemove}
           />

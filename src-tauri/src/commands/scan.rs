@@ -1,6 +1,8 @@
 use crate::metadata::track::{read_track, TrackMetadata};
 use rayon::prelude::*;
 use std::path::Path;
+use std::sync::mpsc;
+use tauri::ipc::Channel;
 use walkdir::WalkDir;
 
 fn is_audio_file(path: &Path) -> bool {
@@ -10,14 +12,8 @@ fn is_audio_file(path: &Path) -> bool {
     )
 }
 
-// Accepts a mix of file and directory paths dropped by the user.
-// Directories are walked recursively with walkdir; individual files are
-// checked directly. Paths are collected first, then tags are read in
-// parallel with rayon. Unreadable files are silently skipped.
-#[tauri::command]
-pub fn load_tracks(paths: Vec<String>) -> Vec<TrackMetadata> {
-    let mut candidates: Vec<String> = Vec::new();
-
+fn collect_paths(paths: Vec<String>) -> Vec<String> {
+    let mut candidates = Vec::new();
     for path in paths {
         let p = Path::new(&path);
         if p.is_dir() {
@@ -32,9 +28,39 @@ pub fn load_tracks(paths: Vec<String>) -> Vec<TrackMetadata> {
             candidates.push(path);
         }
     }
-
     candidates
-        .par_iter()
-        .filter_map(|path| read_track(path))
-        .collect()
+}
+
+// Reads audio metadata for all given paths and streams results to the frontend
+// via a Channel in batches of 25. The invoke promise resolves only after all
+// batches have been delivered, so the caller needs no separate "done" signal.
+#[tauri::command]
+pub async fn load_tracks(on_batch: Channel<Vec<TrackMetadata>>, paths: Vec<String>) {
+    tauri::async_runtime::spawn_blocking(move || {
+        let candidates = collect_paths(paths);
+        let (tx, rx) = mpsc::channel::<TrackMetadata>();
+
+        std::thread::spawn(move || {
+            candidates.par_iter().for_each_with(tx, |tx, path| {
+                if let Some(track) = read_track(path) {
+                    let _ = tx.send(track);
+                }
+            });
+            // dropping tx closes the channel, ending the rx loop below
+        });
+
+        const BATCH: usize = 25;
+        let mut batch = Vec::with_capacity(BATCH);
+        for track in rx {
+            batch.push(track);
+            if batch.len() >= BATCH {
+                let _ = on_batch.send(std::mem::take(&mut batch));
+            }
+        }
+        if !batch.is_empty() {
+            let _ = on_batch.send(batch);
+        }
+    })
+    .await
+    .ok();
 }
