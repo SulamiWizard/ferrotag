@@ -36,6 +36,7 @@ export interface TrackRow {
   path: string;
   file: string;          // filename portion of path
   fmt: string;           // format derived from extension (FLAC, MP3, …)
+  size: number;          // file size in bytes
   // artUrl: undefined = not yet loaded; null = loaded, no art; string = data URI
   tags: EditableTags;    // live editable copy
   orig: EditableTags;    // pristine snapshot (updated on save)
@@ -45,7 +46,7 @@ export interface TrackRow {
   pendingArtRemove: boolean;
 }
 
-export type SortKey = "trackNo" | "title" | "artist" | "album" | "year" | "fmt";
+export type SortKey = "trackNo" | "title" | "artist" | "album" | "year" | "genre" | "fmt";
 export type SortDir = "asc" | "desc";
 
 export function trackToRow(t: Track): TrackRow {
@@ -55,6 +56,7 @@ export function trackToRow(t: Track): TrackRow {
     path: t.path,
     file: t.path.split(/[/\\]/).pop() ?? t.path,
     fmt: pathToFormat(t.path),
+    size: t.size_bytes,
     tags,
     orig: { ...tags },
     modified: false,
@@ -114,6 +116,47 @@ export function isTagsDirty(tags: EditableTags, orig: EditableTags): boolean {
   return (Object.keys(tags) as Array<keyof EditableTags>).some((k) => tags[k] !== orig[k]);
 }
 
+function cmpAlbumTrack(a: TrackRow, b: TrackRow): number {
+  const albumA = a.tags.album.toLowerCase();
+  const albumB = b.tags.album.toLowerCase();
+  if (albumA < albumB) return -1;
+  if (albumA > albumB) return 1;
+  const discA = parseInt(a.tags.discNo, 10) || 0;
+  const discB = parseInt(b.tags.discNo, 10) || 0;
+  if (discA !== discB) return discA - discB;
+  const trkA = parseInt(a.tags.trackNo, 10) || Infinity;
+  const trkB = parseInt(b.tags.trackNo, 10) || Infinity;
+  return trkA - trkB;
+}
+
+// Secondary sort applied when the primary key produces a tie.
+// Keeps tracks within the same album in disc/track order regardless of
+// which column is sorted.
+const SECONDARY: Partial<Record<SortKey, (a: TrackRow, b: TrackRow) => number>> = {
+  artist: (a, b) => cmpAlbumTrack(a, b),
+  album:  (a, b) => cmpAlbumTrack(a, b),
+  year:   (a, b) => cmpAlbumTrack(a, b),
+  genre:  (a, b) => {
+    const artistA = a.tags.artist.toLowerCase();
+    const artistB = b.tags.artist.toLowerCase();
+    if (artistA < artistB) return -1;
+    if (artistA > artistB) return 1;
+    return cmpAlbumTrack(a, b);
+  },
+  fmt:    (a, b) => {
+    const artistA = a.tags.artist.toLowerCase();
+    const artistB = b.tags.artist.toLowerCase();
+    if (artistA < artistB) return -1;
+    if (artistA > artistB) return 1;
+    return cmpAlbumTrack(a, b);
+  },
+  trackNo: (a, b) => {
+    const discA = parseInt(a.tags.discNo, 10) || 0;
+    const discB = parseInt(b.tags.discNo, 10) || 0;
+    return discA - discB;
+  },
+};
+
 export function sortedRows(rows: TrackRow[], key: SortKey, dir: SortDir): TrackRow[] {
   return [...rows].sort((a, b) => {
     let va: string | number, vb: string | number;
@@ -131,13 +174,14 @@ export function sortedRows(rows: TrackRow[], key: SortKey, dir: SortDir): TrackR
         artist: "artist",
         album: "album",
         year: "year",
+        genre: "genre",
       };
       va = (a.tags[tagKey[key]] ?? "").toLowerCase();
       vb = (b.tags[tagKey[key]] ?? "").toLowerCase();
     }
     if (va < vb) return dir === "asc" ? -1 : 1;
     if (va > vb) return dir === "asc" ? 1 : -1;
-    return 0;
+    return SECONDARY[key]?.(a, b) ?? 0;
   });
 }
 

@@ -27,7 +27,8 @@ const COLUMNS: {
   { key: "title",   label: "Title",  grow: 2.2,           sortKey: "title" },
   { key: "artist",  label: "Artist", grow: 1.4,           sortKey: "artist" },
   { key: "album",   label: "Album",  grow: 1.6,           sortKey: "album" },
-  { key: "genre",   label: "Genre",  grow: 1 },
+  { key: "genre",   label: "Genre",  grow: 1, sortKey: "genre" },
+  { key: "year",    label: "Year",   w: 52,  mono: true, align: "right", sortKey: "year" },
   { key: "fmt",     label: "Type",   w: 56,  mono: true,  sortKey: "fmt" },
 ];
 
@@ -60,11 +61,12 @@ export default function FilesPane({
   });
 
   // Scroll the virtualised list to keep keyboard-navigated rows visible.
+  // Only depends on scrollToId — row updates (e.g. art loading) must not retrigger.
   useEffect(() => {
     if (!scrollToId) return;
     const idx = rows.findIndex((r) => r.id === scrollToId);
     if (idx >= 0) virtualizer.scrollToIndex(idx, { align: "auto" });
-  }, [scrollToId, rows]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [scrollToId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleHeaderSort(key: SortKey) {
     onSort(key, sort.key === key && sort.dir === "asc" ? "desc" : "asc");
@@ -182,6 +184,9 @@ export default function FilesPane({
                   </div>
                   <div className="fl-td dim">
                     {row.tags.genre || <span className="ph">—</span>}
+                  </div>
+                  <div className="fl-td fl-td--r mono dim">
+                    {row.tags.year || <span className="ph">—</span>}
                   </div>
                   <div className="fl-td mono">
                     <span className={`fmt-chip fmt-${row.fmt.toLowerCase()}`}>{row.fmt}</span>

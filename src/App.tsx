@@ -25,6 +25,13 @@ import {
 } from "@/lib/track-row";
 import { applyRenamePattern } from "@/lib/rename-pattern";
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
 interface DragDropPayload {
   paths: string[];
 }
@@ -86,6 +93,8 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [renamePattern, setRenamePattern] = useState("");
   const [scrollToId, setScrollToId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const displayed = useMemo(() => {
     let r = rows;
@@ -428,9 +437,28 @@ export default function App() {
         setRows([]);
         setSelectedIds(new Set());
       }),
+      listen<boolean>("context-menu-registered", (e) => {
+        setNotice(e.payload ? "Context menu registered." : "Failed to register context menu.");
+      }),
+      listen<boolean>("context-menu-unregistered", (e) => {
+        setNotice(e.payload ? "Context menu unregistered." : "Failed to unregister context menu.");
+      }),
     ]);
     return () => { unlisteners.then((fns) => fns.forEach((f) => f())); };
   }, []);
+
+  // Open the folder passed as a CLI argument (e.g. from Windows context menu).
+  useEffect(() => {
+    invoke<string | null>("get_startup_path").then((path) => {
+      if (path) openTracks([path]);
+    });
+  }, [openTracks]);
+
+  useEffect(() => {
+    if (!notice) return;
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 3000);
+  }, [notice]);
 
   // Compute art state for the editor from selected rows.
   const artUrls = selRows.map((r) => r.artUrl);
@@ -548,11 +576,23 @@ export default function App() {
             <span>{selRows[0]?.fmt ?? ""}</span>
             <span className="sb-sep" />
             <span className="dim">{selRows[0]?.file ?? ""}</span>
+            <span className="sb-sep" />
+            <span className="dim">{formatBytes(selRows[0]?.size ?? 0)}</span>
           </>
         ) : (
-          <span>{selectedIds.size} files selected</span>
+          <>
+            <span>{selectedIds.size} files selected</span>
+            <span className="sb-sep" />
+            <span className="dim">{formatBytes(selRows.reduce((s, r) => s + r.size, 0))}</span>
+          </>
         )}
         <div style={{ flex: 1 }} />
+        {notice && (
+          <>
+            <span className="sb-sep" />
+            <span className="sb-notice">{notice}</span>
+          </>
+        )}
         {renamePattern.trim() && selRows.length === 1 && (
           <>
             <span className="dim">→</span>

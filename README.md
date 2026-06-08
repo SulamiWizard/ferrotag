@@ -50,7 +50,17 @@ Available tokens:
 | `{composer}` | Composer |
 | `{bpm}` | BPM |
 
-Example: `{track_number} – {title}` → `03 – Blue in Green.flac`
+Tokens that hold a number accept an optional pad width using `{token:N}`:
+
+| Pattern | Tag value | Result |
+|---------|-----------|--------|
+| `{track_number}` | `3` | `3` |
+| `{track_number:2}` | `3` | `03` |
+| `{track_number:3}` | `3` | `003` |
+
+Padding is only applied when the tag value is a plain integer. Non-numeric values (e.g. `03/12`) are left as-is.
+
+Example: `{track_number:2} – {title}` → `03 – Blue in Green.flac`
 
 The original file extension is always preserved. Characters illegal in filenames are stripped automatically.
 

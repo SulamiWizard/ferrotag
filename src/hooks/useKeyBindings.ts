@@ -5,12 +5,15 @@ type KeyMap = Record<string, (e: KeyboardEvent) => void>;
 export function useKeyBindings(map: KeyMap) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // Allow modifier combos (e.g. mod+s) inside inputs, but block bare keys
-      // like arrow navigation so they don't fight with normal text editing.
       const inInput =
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement;
-      if (inInput && !e.ctrlKey && !e.metaKey) return;
+      // Inside a text field, only intercept mod+s (save). Everything else
+      // (including mod+a select-all, arrow keys, etc.) goes to the browser.
+      if (inInput) {
+        const isSave = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s";
+        if (!isSave) return;
+      }
       // "mod" is an alias for Ctrl (Windows/Linux) or Cmd (Mac) so a single
       // map entry handles both platforms.
       const key = [

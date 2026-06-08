@@ -1,8 +1,13 @@
 use base64::{engine::general_purpose::STANDARD, Engine};
+use lofty::config::ParseOptions;
 use lofty::picture::PictureType;
 use lofty::prelude::*;
 use lofty::probe::Probe;
 use serde::{Deserialize, Serialize};
+
+fn parse_opts() -> ParseOptions {
+    ParseOptions::new().implicit_conversions(false)
+}
 
 // Mirrors the TypeScript Track interface in src/types/track.ts.
 // Tauri serializes this to JSON when returning it to the frontend, so field
@@ -11,6 +16,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone)]
 pub struct TrackMetadata {
     pub path: String,
+    pub size_bytes: u64,
     pub title: Option<String>,
     pub artists: Vec<String>,
     pub album: Option<String>,
@@ -41,7 +47,7 @@ pub struct TrackMetadata {
 // Reads the embedded CoverFront picture and returns it as a base64 data URI
 // (e.g. "data:image/jpeg;base64,...") so it can be used directly in an <img> src.
 pub fn get_album_art(path: &str) -> Option<String> {
-    let tagged_file = Probe::open(path).ok()?.read().ok()?;
+    let tagged_file = Probe::open(path).ok()?.options(parse_opts()).read().ok()?;
     let tag = tagged_file.primary_tag()?;
 
     let picture = tag
@@ -60,11 +66,12 @@ pub fn get_album_art(path: &str) -> Option<String> {
 // a TrackMetadata struct. Returns None if the file can't be opened or parsed.
 // Fields missing from the file's tags are returned as None/empty vec.
 pub fn read_track(path: &str) -> Option<TrackMetadata> {
-    let tagged_file = Probe::open(path).ok()?.read().ok()?;
+    let tagged_file = Probe::open(path).ok()?.options(parse_opts()).read().ok()?;
     let tag = tagged_file.primary_tag();
 
     Some(TrackMetadata {
         path: path.to_string(),
+        size_bytes: std::fs::metadata(path).map(|m| m.len()).unwrap_or(0),
         title: tag.and_then(|t| t.title().map(|s| s.to_string())),
         // get_strings returns all values for the key (important for FLAC which
         // can have multiple ARTIST tags).

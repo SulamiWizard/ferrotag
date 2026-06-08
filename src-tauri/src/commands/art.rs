@@ -1,9 +1,14 @@
 use base64::{engine::general_purpose::STANDARD, Engine};
+use lofty::config::ParseOptions;
 use lofty::picture::{MimeType, Picture, PictureType};
 use lofty::prelude::*;
 use lofty::probe::Probe;
 use rayon::prelude::*;
 use std::collections::HashMap;
+
+fn parse_opts() -> ParseOptions {
+    ParseOptions::new().implicit_conversions(false)
+}
 
 use crate::metadata::track::get_album_art;
 
@@ -67,6 +72,7 @@ pub fn set_album_art(audio_paths: Vec<String>, image_path: String) -> Result<(),
     for path in &audio_paths {
         let mut tagged_file = Probe::open(path)
             .map_err(|e| e.to_string())?
+            .options(parse_opts())
             .read()
             .map_err(|e| e.to_string())?;
 
@@ -98,6 +104,7 @@ pub fn remove_album_art(audio_paths: Vec<String>) -> Result<(), String> {
     for path in &audio_paths {
         let mut tagged_file = Probe::open(path)
             .map_err(|e| e.to_string())?
+            .options(parse_opts())
             .read()
             .map_err(|e| e.to_string())?;
         let tag = match tagged_file.primary_tag_mut() {
@@ -118,6 +125,7 @@ pub fn remove_album_art(audio_paths: Vec<String>) -> Result<(), String> {
 pub fn extract_album_art(audio_path: String, dest_path: String) -> Result<(), String> {
     let tagged_file = Probe::open(&audio_path)
         .map_err(|e| e.to_string())?
+        .options(parse_opts())
         .read()
         .map_err(|e| e.to_string())?;
     let tag = tagged_file.primary_tag().ok_or("No tag found")?;

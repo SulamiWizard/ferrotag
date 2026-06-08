@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { TrackRow, EditableTags, MULTI, sharedTagValue } from "@/lib/track-row";
 
+function formatArtBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
 interface TagEditorProps {
   selRows: TrackRow[];
   artUrl: string | null;
@@ -42,7 +47,20 @@ function Field({
   };
   return (
     <label className={`tf${field.narrow ? " tf--narrow" : ""}`}>
-      <span className="tf-label">{field.label}</span>
+      <div className="tf-label-row">
+        <span className="tf-label">{field.label}</span>
+        {isMulti && (
+          <button
+            type="button"
+            className="tf-clear"
+            title="Clear all selected tracks"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onChange(field.key, "")}
+          >
+            Clear all
+          </button>
+        )}
+      </div>
       {field.multiline ? <textarea {...props} rows={2} /> : <input {...props} />}
     </label>
   );
@@ -93,6 +111,7 @@ function AlbumArt({
   const [drag, setDrag] = useState(false);
   const [menu, setMenu] = useState(false);
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
+  const [artInfo, setArtInfo] = useState<{ w: number; h: number; bytes: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -103,6 +122,18 @@ function AlbumArt({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [menu]);
+
+  useEffect(() => {
+    if (!artUrl || mixedArt) { setArtInfo(null); return; }
+    // Byte size: strip the data URI prefix, decode base64 length to raw bytes
+    const b64 = artUrl.split(",")[1] ?? "";
+    const padding = (b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0);
+    const bytes = Math.floor(b64.length * 0.75) - padding;
+    // Resolve pixel dimensions by loading into a temporary Image
+    const img = new Image();
+    img.onload = () => setArtInfo({ w: img.naturalWidth, h: img.naturalHeight, bytes });
+    img.src = artUrl;
+  }, [artUrl, mixedArt]);
 
   const hasArt = !!artUrl && !mixedArt;
 
@@ -159,7 +190,13 @@ function AlbumArt({
         )}
       </div>
       <div className="art__meta mono">
-        {hasArt ? "embedded" : mixedArt ? "multiple covers" : "no artwork"}
+        {hasArt && artInfo
+          ? `${artInfo.w} × ${artInfo.h} · ${formatArtBytes(artInfo.bytes)}`
+          : hasArt
+          ? "embedded"
+          : mixedArt
+          ? "multiple covers"
+          : "no artwork"}
       </div>
       {menu && (
         <div className="art-menu" style={{ top: menuPos.y, left: menuPos.x }}>
@@ -260,9 +297,9 @@ export default function TagEditor({
             <Field field={f("artist",      "Artist")}       sel={selRows} onChange={onEdit} />
             <Field field={f("album",       "Album")}        sel={selRows} onChange={onEdit} />
             <Field field={f("albumArtist", "Album Artist")} sel={selRows} onChange={onEdit} />
-            <Field field={f("year",  "Year",  { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
-            <Field field={f("genre", "Genre", { narrow: true })}             sel={selRows} onChange={onEdit} />
-            <Field field={f("composer", "Composer")} sel={selRows} onChange={onEdit} />
+            <Field field={f("trackNo", "Track #", { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
+            <Field field={f("year",    "Year",    { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
+            <Field field={f("genre", "Genre")} sel={selRows} onChange={onEdit} />
 
             <ExpandGroup label="More date fields">
               <div className="tf-grid">
@@ -287,10 +324,10 @@ export default function TagEditor({
         <div className="tf-section">
           <div className="tf-section__label">Extended</div>
           <div className="tf-grid">
-            <Field field={f("trackNo", "Track #", { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
-            <Field field={f("discNo",  "Disc #",  { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
-            <Field field={f("bpm",     "BPM",     { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
-            <Field field={f("comment", "Comment", { multiline: true })}          sel={selRows} onChange={onEdit} />
+            <Field field={f("discNo",    "Disc #",   { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
+            <Field field={f("bpm",       "BPM",      { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
+            <Field field={f("composer",  "Composer")}                               sel={selRows} onChange={onEdit} />
+            <Field field={f("comment",   "Comment",  { multiline: true })}          sel={selRows} onChange={onEdit} />
 
             <ExpandGroup label="More comment fields">
               <Field field={f("description", "Description", { multiline: true })} sel={selRows} onChange={onEdit} />

@@ -9,6 +9,7 @@
 // In the UI they're joined/split with "; " as a delimiter — see src/lib/tauri.ts.
 export interface Track {
   path: string;
+  size_bytes: number;
   title?: string;
   artists: string[];
   album?: string;
