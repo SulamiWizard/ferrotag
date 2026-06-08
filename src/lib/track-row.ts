@@ -72,7 +72,7 @@ function trackToTags(t: Track): EditableTags {
     artist: t.artists.join("; "),
     album: t.album ?? "",
     albumArtist: t.album_artists.join("; "),
-    year: t.recording_date ?? "",
+    year: t.recording_date ?? t.year ?? "",
     yearLegacy: t.year ?? "",
     releaseDate: t.release_date ?? "",
     originalReleaseDate: t.original_release_date ?? "",

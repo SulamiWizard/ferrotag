@@ -1,13 +1,11 @@
 use base64::{engine::general_purpose::STANDARD, Engine};
 use lofty::config::ParseOptions;
+use lofty::file::TaggedFile;
+use lofty::tag::TagType;
 use lofty::picture::PictureType;
 use lofty::prelude::*;
 use lofty::probe::Probe;
 use serde::{Deserialize, Serialize};
-
-fn parse_opts() -> ParseOptions {
-    ParseOptions::new().implicit_conversions(false)
-}
 
 // Mirrors the TypeScript Track interface in src/types/track.ts.
 // Tauri serializes this to JSON when returning it to the frontend, so field
@@ -47,7 +45,7 @@ pub struct TrackMetadata {
 // Reads the embedded CoverFront picture and returns it as a base64 data URI
 // (e.g. "data:image/jpeg;base64,...") so it can be used directly in an <img> src.
 pub fn get_album_art(path: &str) -> Option<String> {
-    let tagged_file = Probe::open(path).ok()?.options(parse_opts()).read().ok()?;
+    let tagged_file = Probe::open(path).ok()?.read().ok()?;
     let tag = tagged_file.primary_tag()?;
 
     let picture = tag
@@ -66,8 +64,24 @@ pub fn get_album_art(path: &str) -> Option<String> {
 // a TrackMetadata struct. Returns None if the file can't be opened or parsed.
 // Fields missing from the file's tags are returned as None/empty vec.
 pub fn read_track(path: &str) -> Option<TrackMetadata> {
-    let tagged_file = Probe::open(path).ok()?.options(parse_opts()).read().ok()?;
-    let tag = tagged_file.primary_tag();
+    // implicit_conversions(false) preserves exact stored values (e.g. padded
+    // TRACKNUMBER="01" in Vorbis comments). However, ID3v2 date frames (TDRC etc.)
+    // are not parsed in this mode, so for ID3v2 files we do a second read with
+    // default options just to resolve those fields.
+    let tagged = Probe::open(path).ok()?
+        .options(ParseOptions::new().implicit_conversions(false))
+        .read().ok()?;
+
+    let date_tagged: Option<TaggedFile> = if tagged.primary_tag_type() == TagType::Id3v2 {
+        Probe::open(path).ok().and_then(|p| p.read().ok())
+    } else {
+        None
+    };
+
+    let tag = tagged.primary_tag();
+    let date_tag = date_tagged.as_ref()
+        .and_then(|tf| tf.primary_tag())
+        .or(tag);
 
     Some(TrackMetadata {
         path: path.to_string(),
@@ -90,13 +104,11 @@ pub fn read_track(path: &str) -> Option<TrackMetadata> {
                     .collect()
             })
             .unwrap_or_default(),
-        year: tag.and_then(|t| t.get_string(ItemKey::Year).map(|s| s.to_string())),
-        release_date: tag.and_then(|t| t.get_string(ItemKey::ReleaseDate).map(|s| s.to_string())),
-        recording_date: tag
-            .and_then(|t| t.get_string(ItemKey::RecordingDate).map(|s| s.to_string())),
-        original_release_date: tag.and_then(|t| {
-            t.get_string(ItemKey::OriginalReleaseDate)
-                .map(|s| s.to_string())
+        year: date_tag.and_then(|t| t.get_string(ItemKey::Year).map(|s| s.to_string())),
+        release_date: date_tag.and_then(|t| t.get_string(ItemKey::ReleaseDate).map(|s| s.to_string())),
+        recording_date: date_tag.and_then(|t| t.get_string(ItemKey::RecordingDate).map(|s| s.to_string())),
+        original_release_date: date_tag.and_then(|t| {
+            t.get_string(ItemKey::OriginalReleaseDate).map(|s| s.to_string())
         }),
         track_number: tag.and_then(|t| t.get_string(ItemKey::TrackNumber).map(|s| s.to_string())),
         disc_number: tag.and_then(|t| t.get_string(ItemKey::DiscNumber).map(|s| s.to_string())),
