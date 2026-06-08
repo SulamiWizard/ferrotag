@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - "v*" # triggers on tags like v1.0.0
+      - "v*"
   workflow_dispatch:
 
 jobs:
@@ -14,14 +14,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest
-            args: "--target aarch64-apple-darwin" # Apple Silicon
-          - platform: macos-latest
-            args: "--target x86_64-apple-darwin" # Intel Mac
+          - platform: macos-latest  # Apple Silicon (M1/M2)
+            args: "--target aarch64-apple-darwin"
+            rust-targets: "aarch64-apple-darwin"
+          - platform: macos-13      # Intel
+            args: "--target x86_64-apple-darwin"
+            rust-targets: "x86_64-apple-darwin"
           - platform: ubuntu-22.04
-            args: "" # Linux (X11 + Wayland) // TODO: check if wayland works on release
+            args: ""
+            rust-targets: ""
           - platform: windows-latest
-            args: "" # Windows
+            args: ""
+            rust-targets: ""
 
     runs-on: ${{ matrix.platform }}
 
@@ -34,7 +38,12 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
 
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
@@ -45,8 +54,10 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf \
+            libwayland-dev \
             libxdo-dev \
-            libssl-dev
+            libssl-dev \
+            libgtk-3-dev
 
       - name: Install frontend dependencies
         run: bun install
