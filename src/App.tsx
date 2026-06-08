@@ -175,6 +175,7 @@ export default function App() {
     if (dirty.length === 0) return;
 
     const pathUpdates = new Map<string, string>(); // oldId -> newPath
+    const failedIds = new Set<string>();
 
     for (const row of dirty) {
       try {
@@ -189,6 +190,7 @@ export default function App() {
         }
       } catch (e) {
         console.error(`Failed to save ${row.file}:`, e);
+        failedIds.add(row.id);
         continue;
       }
 
@@ -208,9 +210,18 @@ export default function App() {
       }
     }
 
+    if (failedIds.size > 0) {
+      const names = dirty
+        .filter((r) => failedIds.has(r.id))
+        .map((r) => r.file)
+        .join(", ");
+      setNotice(`Failed to save: ${names}`);
+    }
+
     setRows((prev) =>
       prev.map((r) => {
         if (!r.modified && !r.pendingArtPath && !r.pendingArtRemove) return r;
+        if (failedIds.has(r.id)) return r; // keep dirty state for failed saves
         const newPath = pathUpdates.get(r.id);
         const base = {
           ...r,
