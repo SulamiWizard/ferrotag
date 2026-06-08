@@ -69,7 +69,12 @@ pub fn set_album_art(audio_paths: Vec<String>, image_path: String) -> Result<(),
             .map_err(|e| e.to_string())?
             .read()
             .map_err(|e| e.to_string())?;
-        let tag = tagged_file.primary_tag_mut().ok_or("No tag found")?;
+
+        if tagged_file.primary_tag().is_none() {
+            let tag_type = tagged_file.primary_tag_type();
+            tagged_file.insert_tag(lofty::tag::Tag::new(tag_type));
+        }
+        let tag = tagged_file.primary_tag_mut().ok_or("Failed to initialize tag")?;
 
         let picture = Picture::unchecked(image_data.clone())
             .pic_type(PictureType::CoverFront)
@@ -95,7 +100,10 @@ pub fn remove_album_art(audio_paths: Vec<String>) -> Result<(), String> {
             .map_err(|e| e.to_string())?
             .read()
             .map_err(|e| e.to_string())?;
-        let tag = tagged_file.primary_tag_mut().ok_or("No tag found")?;
+        let tag = match tagged_file.primary_tag_mut() {
+            Some(t) => t,
+            None => continue, // no tag means no art to remove
+        };
         tag.remove_picture_type(PictureType::CoverFront);
         tagged_file
             .save_to_path(path, lofty::config::WriteOptions::default())

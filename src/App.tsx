@@ -168,19 +168,23 @@ export default function App() {
     const pathUpdates = new Map<string, string>(); // oldId -> newPath
 
     for (const row of dirty) {
-      const changes = buildSaveChanges(row.tags, row.orig);
-      if (Object.keys(changes).length > 0) {
-        await invoke("save_track", { path: row.path, changes });
-      }
-      if (row.pendingArtRemove) {
-        await invoke("remove_album_art", { audioPaths: [row.path] });
-      } else if (row.pendingArtPath) {
-        await invoke("set_album_art", { audioPaths: [row.path], imagePath: row.pendingArtPath });
+      try {
+        const changes = buildSaveChanges(row.tags, row.orig);
+        if (Object.keys(changes).length > 0) {
+          await invoke("save_track", { path: row.path, changes });
+        }
+        if (row.pendingArtRemove) {
+          await invoke("remove_album_art", { audioPaths: [row.path] });
+        } else if (row.pendingArtPath) {
+          await invoke("set_album_art", { audioPaths: [row.path], imagePath: row.pendingArtPath });
+        }
+      } catch (e) {
+        console.error(`Failed to save ${row.file}:`, e);
+        continue;
       }
 
       if (renamePattern.trim()) {
         const newFilename = applyRenamePattern(renamePattern, row.tags, row.path);
-        const sep = row.path.includes("/") ? "/" : "\\";
         const lastSep = Math.max(row.path.lastIndexOf("/"), row.path.lastIndexOf("\\"));
         const dir = lastSep >= 0 ? row.path.slice(0, lastSep + 1) : "";
         const newPath = dir + newFilename;
@@ -190,7 +194,6 @@ export default function App() {
             pathUpdates.set(row.id, newPath);
           } catch {
             // Skip rename on conflict; tags are already saved
-            void sep;
           }
         }
       }
@@ -227,13 +230,30 @@ export default function App() {
   }, [rows, renamePattern]);
 
   // Revert all dirty rows to their orig snapshot.
-  const handleRevert = useCallback(() => {
+  const handleRevert = useCallback(async () => {
+    // Collect rows whose art was staged so we can reload from disk after reverting.
+    const artToReload = rowsRef.current
+      .filter((r) => r.pendingArtPath || r.pendingArtRemove)
+      .map((r) => r.id);
+
     setRows((prev) =>
       prev.map((r) => {
         if (!r.modified && !r.pendingArtPath && !r.pendingArtRemove) return r;
-        const artUrl = r.pendingArtRemove ? undefined : r.artUrl;
+        // Clear artUrl so the art well resets — actual value reloaded below.
+        const artUrl = (r.pendingArtPath || r.pendingArtRemove) ? undefined : r.artUrl;
         return { ...r, tags: { ...r.orig }, modified: false, pendingArtPath: null, pendingArtRemove: false, artUrl };
       }),
+    );
+
+    if (artToReload.length === 0) return;
+    const results = await Promise.all(
+      artToReload.map((id) => invoke<string | null>("load_album_art", { path: id })),
+    );
+    const updates = new Map(artToReload.map((id, i) => [id, results[i]]));
+    setRows((prev) =>
+      prev.map((row) =>
+        updates.has(row.id) ? { ...row, artUrl: updates.get(row.id) ?? null } : row,
+      ),
     );
   }, []);
 

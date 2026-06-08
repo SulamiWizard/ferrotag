@@ -521,7 +521,7 @@ textarea.tf-input {
 }
 
 /* ——— album art well ——— */
-.art { display: flex; flex-direction: column; gap: 7px; width: 100%; max-width: 220px; }
+.art { display: flex; flex-direction: column; gap: 7px; width: 100%; max-width: 220px; position: relative; }
 .art__well {
   width: 100%;
   aspect-ratio: 1;
@@ -568,8 +568,6 @@ textarea.tf-input {
 
 .art-menu {
   position: absolute;
-  top: 8px;
-  left: 8px;
   z-index: 50;
   background: var(--bg-1);
   border: 1px solid var(--border);

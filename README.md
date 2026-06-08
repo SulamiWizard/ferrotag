@@ -9,9 +9,11 @@ A fast, minimal desktop music tag editor built with Tauri, React, and Rust.
 - Edit tags for MP3, FLAC, OGG, M4A, WAV, AIFF, APE, Opus, and WavPack files
 - Open individual files or entire folders via the file picker, or drag and drop either onto the window
 - Batch edit — select multiple tracks and update shared fields at once
-- Album art — embed, replace, extract, or remove cover art
+- Album art — embed, replace, extract, or remove cover art; drag an image onto the art well to set it
 - File renamer — optionally rename files on save using tag-based patterns like `{artist} – {track_number} – {title}`
 - Extended tag support: credits, sort fields, dates, BPM, comments, and more
+- Virtualised file list — smooth scrolling for libraries of any size
+- Progressive loading — tracks stream into the list as they are read, no waiting for the full scan to finish
 - Resizable split-panel interface with recursive folder scanning
 - Keyboard shortcuts: `Ctrl+S` save, `Ctrl+A` select all, `↑ ↓` navigate
 
@@ -57,7 +59,7 @@ The original file extension is always preserved. Characters illegal in filenames
 | Layer | Tools |
 |-------|-------|
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS |
-| Backend | Rust, Tauri 2, Lofty |
+| Backend | Rust, Tauri 2, Lofty, Rayon |
 | Bundler | Bun |
 
 ## Prerequisites
@@ -106,7 +108,7 @@ ferrotag/
 ├── src/                        # React/TypeScript frontend
 │   ├── App.tsx                 # Root component, state, save/rename logic
 │   ├── panes/
-│   │   ├── FilesPane.tsx       # Track list
+│   │   ├── FilesPane.tsx       # Virtualised track list
 │   │   └── MetadataPane.tsx    # Tag editor and album art
 │   └── lib/
 │       ├── track-row.ts        # Row model and dirty tracking

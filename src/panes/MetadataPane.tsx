@@ -92,6 +92,7 @@ function AlbumArt({
 }) {
   const [drag, setDrag] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -113,6 +114,8 @@ function AlbumArt({
         onContextMenu={(e) => {
           if (!artUrl && !mixedArt) return;
           e.preventDefault();
+          const rect = containerRef.current!.getBoundingClientRect();
+          setMenuPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
           setMenu(true);
         }}
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
@@ -159,7 +162,7 @@ function AlbumArt({
         {hasArt ? "embedded" : mixedArt ? "multiple covers" : "no artwork"}
       </div>
       {menu && (
-        <div className="art-menu">
+        <div className="art-menu" style={{ top: menuPos.y, left: menuPos.x }}>
           <button
             type="button"
             className="art-menu__item"
