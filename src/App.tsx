@@ -106,12 +106,18 @@ function loadMetadataSide(): MetadataSide {
   return localStorage.getItem(METADATA_SIDE_KEY) === "left" ? "left" : "right";
 }
 
+const RENAME_PATTERN_KEY = "ferrotag.renamePattern";
+
+function loadRenamePattern(): string {
+  return localStorage.getItem(RENAME_PATTERN_KEY) ?? "";
+}
+
 export default function App() {
   const [rows, setRows] = useState<TrackRow[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "trackNo", dir: "asc" });
   const [search, setSearch] = useState("");
-  const [renamePattern, setRenamePattern] = useState("");
+  const [renamePattern, setRenamePattern] = useState(loadRenamePattern);
   const [scrollToId, setScrollToId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [metadataSide, setMetadataSide] = useState<MetadataSide>(loadMetadataSide);
@@ -120,6 +126,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(METADATA_SIDE_KEY, metadataSide);
   }, [metadataSide]);
+
+  useEffect(() => {
+    localStorage.setItem(RENAME_PATTERN_KEY, renamePattern);
+  }, [renamePattern]);
 
   const displayed = useMemo(() => {
     let r = rows;

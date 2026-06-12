@@ -195,7 +195,7 @@ html, body, #root {
   gap: 6px;
   height: 30px;
   padding: 0 10px;
-  width: 260px;
+  width: 360px;
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: var(--r);
