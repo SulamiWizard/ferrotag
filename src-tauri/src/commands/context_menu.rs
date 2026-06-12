@@ -6,7 +6,9 @@ mod imp {
     const MENU_NAME: &str = "Open with Ferrotag";
     const SHELL_DIR: &str = r"Software\Classes\Directory\shell\Open with Ferrotag";
     const SHELL_BG: &str = r"Software\Classes\Directory\Background\shell\Open with Ferrotag";
-    const AUDIO_EXTS: &[&str] = &["mp3", "flac", "ogg", "m4a", "wav", "aiff", "ape", "opus", "wv"];
+    const AUDIO_EXTS: &[&str] = &[
+        "mp3", "flac", "ogg", "m4a", "wav", "aiff", "ape", "opus", "wv",
+    ];
 
     fn exe_path() -> Result<String, String> {
         std::env::current_exe()
@@ -16,7 +18,12 @@ mod imp {
             .map(str::to_string)
     }
 
-    fn write_shell_entry(hkcu: &RegKey, shell_key: &str, exe: &str, path_arg: &str) -> Result<(), String> {
+    fn write_shell_entry(
+        hkcu: &RegKey,
+        shell_key: &str,
+        exe: &str,
+        path_arg: &str,
+    ) -> Result<(), String> {
         let (key, _) = hkcu.create_subkey(shell_key).map_err(|e| e.to_string())?;
         key.set_value("", &MENU_NAME).map_err(|e| e.to_string())?;
         key.set_value("Icon", &exe).map_err(|e| e.to_string())?;

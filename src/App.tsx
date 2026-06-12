@@ -84,7 +84,27 @@ const ICONS = {
     </>
   ),
   x: <path d="M6 6l12 12M18 6L6 18" />,
+  layoutRight: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M15 4v16" />
+    </>
+  ),
+  layoutLeft: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16" />
+    </>
+  ),
 };
+
+type MetadataSide = "left" | "right";
+
+const METADATA_SIDE_KEY = "ferrotag.metadataSide";
+
+function loadMetadataSide(): MetadataSide {
+  return localStorage.getItem(METADATA_SIDE_KEY) === "left" ? "left" : "right";
+}
 
 export default function App() {
   const [rows, setRows] = useState<TrackRow[]>([]);
@@ -94,7 +114,12 @@ export default function App() {
   const [renamePattern, setRenamePattern] = useState("");
   const [scrollToId, setScrollToId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [metadataSide, setMetadataSide] = useState<MetadataSide>(loadMetadataSide);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem(METADATA_SIDE_KEY, metadataSide);
+  }, [metadataSide]);
 
   const displayed = useMemo(() => {
     let r = rows;
@@ -542,6 +567,16 @@ export default function App() {
             )}
           </div>
         </div>
+        <div className="toolbar__sep" />
+        <div className="toolbar__group">
+          <button
+            className="tbtn"
+            onClick={() => setMetadataSide((s) => (s === "right" ? "left" : "right"))}
+            title={`Move metadata pane to the ${metadataSide === "right" ? "left" : "right"}`}
+          >
+            <Icon d={metadataSide === "right" ? ICONS.layoutRight : ICONS.layoutLeft} />
+          </button>
+        </div>
       </div>
 
       {/* ——— main panes ——— */}
@@ -550,32 +585,39 @@ export default function App() {
         style={{ minHeight: 0 }}
         className="panes"
       >
-        <ResizablePanel defaultSize={68} minSize={30} className="pane pane--list">
-          <FilesPane
-            rows={displayed}
-            selectedIds={selectedIds}
-            sort={sort}
-            search={search}
-            totalCount={rows.length}
-            scrollToId={scrollToId}
-            onSort={(key, dir) => setSort({ key, dir })}
-            onSelect={handleSelect}
-          />
-        </ResizablePanel>
-
-        <ResizableHandle className="pane-handle" />
-
-        <ResizablePanel defaultSize={32} minSize={20} className="pane pane--editor">
-          <TagEditor
-            selRows={selRows}
-            artUrl={sharedArtUrl ?? null}
-            mixedArt={mixedArt}
-            onEdit={applyEdit}
-            onArtClick={handleArtClick}
-            onArtExtract={handleArtExtract}
-            onArtRemove={handleArtRemove}
-          />
-        </ResizablePanel>
+        {(() => {
+          const listPanel = (
+            <ResizablePanel key="list" id="list" defaultSize={68} minSize={30} className="pane pane--list">
+              <FilesPane
+                rows={displayed}
+                selectedIds={selectedIds}
+                sort={sort}
+                search={search}
+                totalCount={rows.length}
+                scrollToId={scrollToId}
+                onSort={(key, dir) => setSort({ key, dir })}
+                onSelect={handleSelect}
+              />
+            </ResizablePanel>
+          );
+          const editorPanel = (
+            <ResizablePanel key="editor" id="editor" defaultSize={32} minSize={20} className="pane pane--editor">
+              <TagEditor
+                selRows={selRows}
+                artUrl={sharedArtUrl ?? null}
+                mixedArt={mixedArt}
+                onEdit={applyEdit}
+                onArtClick={handleArtClick}
+                onArtExtract={handleArtExtract}
+                onArtRemove={handleArtRemove}
+              />
+            </ResizablePanel>
+          );
+          const handle = <ResizableHandle key="handle" className="pane-handle" />;
+          return metadataSide === "left"
+            ? [editorPanel, handle, listPanel]
+            : [listPanel, handle, editorPanel];
+        })()}
       </ResizablePanelGroup>
 
       {/* ——— status bar ——— */}

@@ -1,10 +1,10 @@
 use base64::{engine::general_purpose::STANDARD, Engine};
 use lofty::config::ParseOptions;
 use lofty::file::TaggedFile;
-use lofty::tag::TagType;
 use lofty::picture::PictureType;
 use lofty::prelude::*;
 use lofty::probe::Probe;
+use lofty::tag::TagType;
 use serde::{Deserialize, Serialize};
 
 // Mirrors the TypeScript Track interface in src/types/track.ts.
@@ -68,9 +68,11 @@ pub fn read_track(path: &str) -> Option<TrackMetadata> {
     // TRACKNUMBER="01" in Vorbis comments). However, ID3v2 date frames (TDRC etc.)
     // are not parsed in this mode, so for ID3v2 files we do a second read with
     // default options just to resolve those fields.
-    let tagged = Probe::open(path).ok()?
+    let tagged = Probe::open(path)
+        .ok()?
         .options(ParseOptions::new().implicit_conversions(false))
-        .read().ok()?;
+        .read()
+        .ok()?;
 
     let date_tagged: Option<TaggedFile> = if tagged.primary_tag_type() == TagType::Id3v2 {
         Probe::open(path).ok().and_then(|p| p.read().ok())
@@ -79,9 +81,7 @@ pub fn read_track(path: &str) -> Option<TrackMetadata> {
     };
 
     let tag = tagged.primary_tag();
-    let date_tag = date_tagged.as_ref()
-        .and_then(|tf| tf.primary_tag())
-        .or(tag);
+    let date_tag = date_tagged.as_ref().and_then(|tf| tf.primary_tag()).or(tag);
 
     Some(TrackMetadata {
         path: path.to_string(),
@@ -105,10 +105,13 @@ pub fn read_track(path: &str) -> Option<TrackMetadata> {
             })
             .unwrap_or_default(),
         year: date_tag.and_then(|t| t.get_string(ItemKey::Year).map(|s| s.to_string())),
-        release_date: date_tag.and_then(|t| t.get_string(ItemKey::ReleaseDate).map(|s| s.to_string())),
-        recording_date: date_tag.and_then(|t| t.get_string(ItemKey::RecordingDate).map(|s| s.to_string())),
+        release_date: date_tag
+            .and_then(|t| t.get_string(ItemKey::ReleaseDate).map(|s| s.to_string())),
+        recording_date: date_tag
+            .and_then(|t| t.get_string(ItemKey::RecordingDate).map(|s| s.to_string())),
         original_release_date: date_tag.and_then(|t| {
-            t.get_string(ItemKey::OriginalReleaseDate).map(|s| s.to_string())
+            t.get_string(ItemKey::OriginalReleaseDate)
+                .map(|s| s.to_string())
         }),
         track_number: tag.and_then(|t| t.get_string(ItemKey::TrackNumber).map(|s| s.to_string())),
         disc_number: tag.and_then(|t| t.get_string(ItemKey::DiscNumber).map(|s| s.to_string())),
@@ -121,11 +124,26 @@ pub fn read_track(path: &str) -> Option<TrackMetadata> {
         conductor: tag.and_then(|t| t.get_string(ItemKey::Conductor).map(|s| s.to_string())),
         arranger: tag.and_then(|t| t.get_string(ItemKey::Arranger).map(|s| s.to_string())),
         remixer: tag.and_then(|t| t.get_string(ItemKey::Remixer).map(|s| s.to_string())),
-        copyright: tag.and_then(|t| t.get_string(ItemKey::CopyrightMessage).map(|s| s.to_string())),
+        copyright: tag.and_then(|t| {
+            t.get_string(ItemKey::CopyrightMessage)
+                .map(|s| s.to_string())
+        }),
         encoded_by: tag.and_then(|t| t.get_string(ItemKey::EncodedBy).map(|s| s.to_string())),
-        sort_title: tag.and_then(|t| t.get_string(ItemKey::TrackTitleSortOrder).map(|s| s.to_string())),
-        sort_artist: tag.and_then(|t| t.get_string(ItemKey::TrackArtistSortOrder).map(|s| s.to_string())),
-        sort_album: tag.and_then(|t| t.get_string(ItemKey::AlbumTitleSortOrder).map(|s| s.to_string())),
-        sort_album_artist: tag.and_then(|t| t.get_string(ItemKey::AlbumArtistSortOrder).map(|s| s.to_string())),
+        sort_title: tag.and_then(|t| {
+            t.get_string(ItemKey::TrackTitleSortOrder)
+                .map(|s| s.to_string())
+        }),
+        sort_artist: tag.and_then(|t| {
+            t.get_string(ItemKey::TrackArtistSortOrder)
+                .map(|s| s.to_string())
+        }),
+        sort_album: tag.and_then(|t| {
+            t.get_string(ItemKey::AlbumTitleSortOrder)
+                .map(|s| s.to_string())
+        }),
+        sort_album_artist: tag.and_then(|t| {
+            t.get_string(ItemKey::AlbumArtistSortOrder)
+                .map(|s| s.to_string())
+        }),
     })
 }

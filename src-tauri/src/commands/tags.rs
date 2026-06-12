@@ -30,7 +30,9 @@ pub fn save_track(path: String, changes: HashMap<String, serde_json::Value>) -> 
     // Modify the tag inside a block so the mutable borrow ends before
     // save_to_path. We also capture what we need for the ID3v2 post-fix.
     let (tag_type, id3v2_tag_snapshot) = {
-        let tag = tagged_file.primary_tag_mut().ok_or("Failed to initialize tag")?;
+        let tag = tagged_file
+            .primary_tag_mut()
+            .ok_or("Failed to initialize tag")?;
 
         for (field, value) in &changes {
             match field.as_str() {
@@ -175,7 +177,8 @@ pub fn save_track(path: String, changes: HashMap<String, serde_json::Value>) -> 
                 }
                 "album_artists" => {
                     if let Some(arr) = value.as_array() {
-                        let album_artists: Vec<&str> = arr.iter().filter_map(|v| v.as_str()).collect();
+                        let album_artists: Vec<&str> =
+                            arr.iter().filter_map(|v| v.as_str()).collect();
 
                         tag.remove_key(ItemKey::AlbumArtist);
 
@@ -200,7 +203,11 @@ pub fn save_track(path: String, changes: HashMap<String, serde_json::Value>) -> 
 
         let tt = tag.tag_type();
         // Only clone when we actually need the snapshot for post-processing.
-        let snapshot = if tt == TagType::Id3v2 { Some(tag.clone()) } else { None };
+        let snapshot = if tt == TagType::Id3v2 {
+            Some(tag.clone())
+        } else {
+            None
+        };
         (tt, snapshot)
     }; // mutable borrow of tagged_file ends here
 
@@ -212,16 +219,18 @@ pub fn save_track(path: String, changes: HashMap<String, serde_json::Value>) -> 
     // leading zeros ("03" → "3"). Fix by re-writing just those frames via the
     // native Id3v2Tag API, which writes frame text verbatim without conversion.
     if tag_type == TagType::Id3v2 {
-        let fixes: Vec<(&'static str, String)> = [
-            ("track_number", "TRCK"),
-            ("disc_number",  "TPOS"),
-        ]
-        .iter()
-        .filter_map(|(change_key, frame_id)| {
-            let v = changes.get(*change_key)?.as_str()?;
-            if v.is_empty() { None } else { Some((*frame_id, v.to_string())) }
-        })
-        .collect();
+        let fixes: Vec<(&'static str, String)> =
+            [("track_number", "TRCK"), ("disc_number", "TPOS")]
+                .iter()
+                .filter_map(|(change_key, frame_id)| {
+                    let v = changes.get(*change_key)?.as_str()?;
+                    if v.is_empty() {
+                        None
+                    } else {
+                        Some((*frame_id, v.to_string()))
+                    }
+                })
+                .collect();
 
         if !fixes.is_empty() {
             use lofty::id3::v2::{Frame, FrameId, Id3v2Tag, TextInformationFrame};

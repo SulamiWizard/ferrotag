@@ -23,7 +23,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(Mutex::new(StartupPath(startup_path)))
         .setup(|app| {
-            let mut file_sub = SubmenuBuilder::new(app, "File")
+            let file_sub = SubmenuBuilder::new(app, "File")
                 .text("open", "Open Folder")
                 .separator()
                 .text("save", "Save Changes")
@@ -32,7 +32,7 @@ pub fn run() {
             #[cfg(target_os = "windows")]
             {
                 file_sub = file_sub
-                    .text("register_ctx_menu",   "Register \"Open folder in Ferrotag\"")
+                    .text("register_ctx_menu", "Register \"Open folder in Ferrotag\"")
                     .text("unregister_ctx_menu", "Unregister context menu")
                     .separator();
             }
@@ -52,11 +52,21 @@ pub fn run() {
             app.set_menu(menu)?;
 
             app.on_menu_event(|app, event| match event.id().as_ref() {
-                "open"       => { let _ = app.emit("menu-open", ()); }
-                "save"       => { let _ = app.emit("menu-save", ()); }
-                "select_all" => { let _ = app.emit("menu-select-all", ()); }
-                "clear"      => { let _ = app.emit("menu-clear", ()); }
-                "quit"       => { app.exit(0); }
+                "open" => {
+                    let _ = app.emit("menu-open", ());
+                }
+                "save" => {
+                    let _ = app.emit("menu-save", ());
+                }
+                "select_all" => {
+                    let _ = app.emit("menu-select-all", ());
+                }
+                "clear" => {
+                    let _ = app.emit("menu-clear", ());
+                }
+                "quit" => {
+                    app.exit(0);
+                }
                 #[cfg(target_os = "windows")]
                 "register_ctx_menu" => {
                     let ok = commands::context_menu::register_context_menu().is_ok();

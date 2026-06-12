@@ -80,7 +80,9 @@ pub fn set_album_art(audio_paths: Vec<String>, image_path: String) -> Result<(),
             let tag_type = tagged_file.primary_tag_type();
             tagged_file.insert_tag(lofty::tag::Tag::new(tag_type));
         }
-        let tag = tagged_file.primary_tag_mut().ok_or("Failed to initialize tag")?;
+        let tag = tagged_file
+            .primary_tag_mut()
+            .ok_or("Failed to initialize tag")?;
 
         let picture = Picture::unchecked(image_data.clone())
             .pic_type(PictureType::CoverFront)
