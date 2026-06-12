@@ -267,6 +267,7 @@ html, body, #root {
   flex: none;
 }
 .fl-th {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -285,6 +286,29 @@ html, body, #root {
   transition: color 0.12s;
 }
 .fl-th--r { justify-content: flex-end; }
+.fl-th__resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 3;
+  touch-action: none;
+}
+.fl-th__resizer::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  right: 3px;
+  width: 2px;
+  border-radius: 1px;
+  background: transparent;
+  transition: background 0.12s;
+}
+.fl-th__resizer:hover::after,
+.fl-th__resizer:active::after { background: var(--accent); }
 .fl-th--sortable { cursor: pointer; }
 .fl-th--sortable:hover { color: var(--text-1); }
 .fl-th__arrow { font-size: 8px; color: var(--accent); }

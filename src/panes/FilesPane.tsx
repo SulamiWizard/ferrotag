@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { TrackRow, SortKey, SortDir } from "@/lib/track-row";
 
@@ -13,28 +13,46 @@ interface FilesPaneProps {
   onSelect: (ids: Set<string>) => void;
 }
 
+// Each column has a default pixel width. Columns are user-resizable (except the
+// status column); a trailing 1fr spacer track absorbs any leftover pane width.
 const COLUMNS: {
   key: string;
   label: string;
-  w?: number;
-  grow?: number;
+  w: number;
   mono?: boolean;
   align?: "right";
   sortKey?: SortKey;
+  noResize?: boolean;
 }[] = [
-  { key: "_status", label: "",       w: 26 },
+  { key: "_status", label: "",       w: 26,  noResize: true },
   { key: "trackNo", label: "#",      w: 42,  mono: true, align: "right", sortKey: "trackNo" },
-  { key: "title",   label: "Title",  grow: 2.2,           sortKey: "title" },
-  { key: "artist",  label: "Artist", grow: 1.4,           sortKey: "artist" },
-  { key: "album",   label: "Album",  grow: 1.6,           sortKey: "album" },
-  { key: "genre",   label: "Genre",  grow: 1, sortKey: "genre" },
-  { key: "year",    label: "Year",   w: 52,  mono: true, align: "right", sortKey: "year" },
-  { key: "fmt",     label: "Type",   w: 56,  mono: true,  sortKey: "fmt" },
+  { key: "title",   label: "Title",  w: 280,                              sortKey: "title" },
+  { key: "artist",  label: "Artist", w: 180,                              sortKey: "artist" },
+  { key: "album",   label: "Album",  w: 200,                              sortKey: "album" },
+  { key: "genre",   label: "Genre",  w: 130,                              sortKey: "genre" },
+  { key: "year",    label: "Year",   w: 56,  mono: true, align: "right",  sortKey: "year" },
+  { key: "fmt",     label: "Type",   w: 60,  mono: true,                  sortKey: "fmt" },
 ];
 
-const GRID_COLS = COLUMNS.map((c) =>
-  c.w ? `${c.w}px` : `minmax(0, ${c.grow}fr)`,
-).join(" ");
+const MIN_COL_W = 40;
+const COL_WIDTHS_KEY = "ferrotag.columnWidths";
+
+type ColWidths = Record<string, number>;
+
+function loadColWidths(): ColWidths {
+  let saved: Partial<ColWidths> = {};
+  try {
+    saved = JSON.parse(localStorage.getItem(COL_WIDTHS_KEY) ?? "{}");
+  } catch {
+    saved = {};
+  }
+  const out: ColWidths = {};
+  for (const c of COLUMNS) {
+    const v = saved[c.key];
+    out[c.key] = c.noResize || typeof v !== "number" || v < MIN_COL_W ? c.w : v;
+  }
+  return out;
+}
 
 const ROW_H = 30; // matches --row-h in balanced density
 
@@ -50,6 +68,35 @@ export default function FilesPane({
 }: FilesPaneProps) {
   const lastClickRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const [colWidths, setColWidths] = useState<ColWidths>(loadColWidths);
+
+  useEffect(() => {
+    localStorage.setItem(COL_WIDTHS_KEY, JSON.stringify(colWidths));
+  }, [colWidths]);
+
+  const gridCols =
+    COLUMNS.map((c) => `${colWidths[c.key]}px`).join(" ") + " minmax(0, 1fr)";
+
+  // Drag a column's right edge to resize it; the trailing spacer takes the slack.
+  function startResize(e: React.PointerEvent, key: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startW = colWidths[key];
+    const onMove = (ev: PointerEvent) => {
+      const next = Math.max(MIN_COL_W, startW + (ev.clientX - startX));
+      setColWidths((w) => ({ ...w, [key]: next }));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = "";
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    document.body.style.cursor = "col-resize";
+  }
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -107,7 +154,7 @@ export default function FilesPane({
   return (
     <div className="filelist">
       {/* ——— header ——— */}
-      <div className="filelist__head" style={{ gridTemplateColumns: GRID_COLS }}>
+      <div className="filelist__head" style={{ gridTemplateColumns: gridCols }}>
         {COLUMNS.map((col) => {
           const isActive = col.sortKey && sort.key === col.sortKey;
           return (
@@ -127,6 +174,14 @@ export default function FilesPane({
               )}
               {isActive && (
                 <span className="fl-th__arrow">{sort.dir === "asc" ? "▲" : "▼"}</span>
+              )}
+              {!col.noResize && (
+                <span
+                  className="fl-th__resizer"
+                  title="Drag to resize column"
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => startResize(e, col.key)}
+                />
               )}
             </div>
           );
@@ -148,7 +203,7 @@ export default function FilesPane({
                   key={vItem.key}
                   className={`fl-row${isSel ? " is-sel" : ""}${untagged ? " is-untagged" : ""}`}
                   style={{
-                    gridTemplateColumns: GRID_COLS,
+                    gridTemplateColumns: gridCols,
                     position: "absolute",
                     top: 0,
                     left: 3,
