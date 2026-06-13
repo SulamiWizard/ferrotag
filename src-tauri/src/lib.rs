@@ -45,6 +45,9 @@ pub fn run() {
                     &SubmenuBuilder::new(app, "Edit")
                         .text("select_all", "Select All")
                         .text("clear", "Clear List")
+                        .separator()
+                        .text("apply_rules", "Apply Rules to All")
+                        .text("edit_rules", "Edit Rules File…")
                         .build()?,
                 )
                 .build()?;
@@ -63,6 +66,12 @@ pub fn run() {
                 }
                 "clear" => {
                     let _ = app.emit("menu-clear", ());
+                }
+                "apply_rules" => {
+                    let _ = app.emit("menu-apply-rules", ());
+                }
+                "edit_rules" => {
+                    let _ = app.emit("menu-edit-rules", ());
                 }
                 "quit" => {
                     app.exit(0);
@@ -94,6 +103,8 @@ pub fn run() {
             commands::art::extract_album_art,
             commands::tags::save_track,
             commands::rename::rename_file,
+            commands::config::get_rules_path,
+            commands::config::read_rules,
             commands::context_menu::register_context_menu,
             commands::context_menu::unregister_context_menu,
         ])

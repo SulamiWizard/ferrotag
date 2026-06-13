@@ -136,6 +136,7 @@ html, body, #root {
   background: color-mix(in oklab, var(--accent) 88%, white);
 }
 .tbtn--primary:disabled { background: var(--bg-2); color: var(--text-2); box-shadow: none; }
+.tbtn--icon { padding: 0; width: 30px; justify-content: center; }
 .tbtn svg { flex: none; }
 
 .searchbox {

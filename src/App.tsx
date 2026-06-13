@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { openPath } from "@tauri-apps/plugin-opener";
 import "./App.css";
 
 import FilesPane from "./panes/FilesPane";
@@ -24,6 +25,7 @@ import {
   EditableTags,
 } from "@/lib/track-row";
 import { applyRenamePattern } from "@/lib/rename-pattern";
+import { parseRuleSet, applyRulesToTags } from "@/lib/rules";
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -84,6 +86,19 @@ const ICONS = {
     </>
   ),
   x: <path d="M6 6l12 12M18 6L6 18" />,
+  wand: (
+    <>
+      <path d="M15 4V2M15 10V8M12 7h2M16 7h2" />
+      <path d="M5 19l9-9 1.5 1.5-9 9z" />
+      <path d="M13.5 5.5L16 8" />
+    </>
+  ),
+  settings: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </>
+  ),
   layoutRight: (
     <>
       <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -397,6 +412,63 @@ export default function App() {
     await invoke("extract_album_art", { audioPath: selRows[0].path, destPath });
   };
 
+  // Read the rules.json config and apply every rule to all loaded files,
+  // marking changed rows dirty so they're picked up by the next Save.
+  const handleApplyRules = useCallback(async () => {
+    if (rowsRef.current.length === 0) {
+      setNotice("Open some files first, then apply rules.");
+      return;
+    }
+    let raw: string;
+    try {
+      raw = await invoke<string>("read_rules");
+    } catch (e) {
+      setNotice(`Couldn't read rules file: ${e}`);
+      return;
+    }
+    let parsed;
+    try {
+      parsed = parseRuleSet(raw);
+    } catch (e) {
+      setNotice(`Invalid rules file: ${e instanceof Error ? e.message : String(e)}`);
+      return;
+    }
+    if (parsed.ruleset.rules.length === 0) {
+      setNotice(
+        parsed.warnings.length > 0
+          ? `No usable rules (${parsed.warnings.length} skipped — check the file).`
+          : "No rules defined. Use Edit → Edit Rules File… to set some up.",
+      );
+      return;
+    }
+
+    const current = rowsRef.current;
+    const updated = current.map((row) => {
+      const tags = applyRulesToTags(row.tags, parsed.ruleset);
+      if (!isTagsDirty(tags, row.tags)) return row; // unchanged by rules
+      return { ...row, tags, modified: isTagsDirty(tags, row.orig) || !!row.pendingArtPath };
+    });
+    const changed = updated.reduce((n, r, i) => n + (r !== current[i] ? 1 : 0), 0);
+    setRows(updated);
+
+    const skipped = parsed.warnings.length > 0 ? ` (${parsed.warnings.length} rule(s) skipped)` : "";
+    setNotice(
+      changed > 0
+        ? `Applied rules to ${changed} file${changed === 1 ? "" : "s"}${skipped}.`
+        : `Rules applied — nothing to change${skipped}.`,
+    );
+  }, []);
+
+  // Open the rules.json file in the user's default editor.
+  const handleEditRules = useCallback(async () => {
+    try {
+      const path = await invoke<string>("get_rules_path");
+      await openPath(path);
+    } catch (e) {
+      setNotice(`Couldn't open rules file: ${e}`);
+    }
+  }, []);
+
   // Stable refs so event listeners (registered once) always call the latest handler.
   const handleSaveRef = useRef(handleSave);
   handleSaveRef.current = handleSave;
@@ -404,6 +476,10 @@ export default function App() {
   handleOpenRef.current = handleOpen;
   const handleArtDropRef = useRef(handleArtDrop);
   handleArtDropRef.current = handleArtDrop;
+  const handleApplyRulesRef = useRef(handleApplyRules);
+  handleApplyRulesRef.current = handleApplyRules;
+  const handleEditRulesRef = useRef(handleEditRules);
+  handleEditRulesRef.current = handleEditRules;
   const displayedRef = useRef(displayed);
   displayedRef.current = displayed;
 
@@ -483,6 +559,8 @@ export default function App() {
         setRows([]);
         setSelectedIds(new Set());
       }),
+      listen("menu-apply-rules", () => handleApplyRulesRef.current()),
+      listen("menu-edit-rules", () => handleEditRulesRef.current()),
       listen<boolean>("context-menu-registered", (e) => {
         setNotice(e.payload ? "Context menu registered." : "Failed to register context menu.");
       }),
@@ -539,6 +617,16 @@ export default function App() {
           >
             <Icon d={ICONS.undo} />
             <span>Revert</span>
+          </button>
+          <div className="toolbar__sep" />
+          <button
+            className="tbtn"
+            disabled={rows.length === 0}
+            onClick={handleApplyRules}
+            title="Apply your rules.json transforms to every loaded file (then Save)"
+          >
+            <Icon d={ICONS.wand} />
+            <span>Apply Rules</span>
           </button>
         </div>
         <div className="toolbar__spacer" />
