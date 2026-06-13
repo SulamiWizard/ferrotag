@@ -23,7 +23,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(Mutex::new(StartupPath(startup_path)))
         .setup(|app| {
-            let file_sub = SubmenuBuilder::new(app, "File")
+            let mut file_sub = SubmenuBuilder::new(app, "File")
                 .text("open", "Open Folder")
                 .separator()
                 .text("save", "Save Changes")
