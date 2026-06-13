@@ -10,8 +10,8 @@ A fast, minimal desktop music tag editor built with Tauri, React, and Rust.
 - Open individual files or entire folders via the file picker, or drag and drop either onto the window
 - Batch edit — select multiple tracks and update shared fields at once
 - Album art — embed, replace, extract, or remove cover art; drag an image onto the art well to set it
-- File renamer — optionally rename files on save using tag-based patterns like `{artist} – {track_number} – {title}`; your pattern persists between sessions
-- Metadata rules — apply batch transforms (zero-pad numbers, blank fields, reduce dates to the year, trim whitespace) to every loaded file via an optional JSON config
+- File renamer — rename files on save or instantly (without saving tags) using patterns like `{artist} – {track_number:2} – {title}`; supports `{artist:2}` for multi-artist files; pattern persists between sessions
+- Metadata rules — batch-transform tags via an optional `rules.json`: trim whitespace globally, zero-pad numbers, extract year from dates, copy one field to another, and more; supports multiple ops per field and a `*` wildcard to target all fields at once
 - Extended tag support: credits, sort fields, dates, BPM, comments, and more
 - Virtualised file list — smooth scrolling for libraries of any size
 - Progressive loading — tracks stream into the list as they are read, no waiting for the full scan to finish
@@ -34,24 +34,34 @@ A fast, minimal desktop music tag editor built with Tauri, React, and Rust.
 
 ## Rename Patterns
 
-Type a pattern in the **Rename:** toolbar field to rename files on save. Leave it empty to skip renaming.
+Type a pattern in the **Rename:** toolbar field. Files are renamed whenever you **Save**, but you can also click the **→** button next to the field to rename all loaded files immediately without saving any tag changes. Leave the field empty to skip renaming.
 
 Available tokens:
 
 | Token | Value |
 |-------|-------|
 | `{title}` | Track title |
-| `{artist}` | First artist |
+| `{artist}` | Primary (first) artist |
 | `{album}` | Album name |
-| `{album_artist}` | First album artist |
-| `{track_number}` | Track number, zero-padded to 2 digits |
-| `{disc_number}` | Disc number, zero-padded to 2 digits |
+| `{album_artist}` | Primary (first) album artist |
+| `{track_number}` | Track number |
+| `{disc_number}` | Disc number |
 | `{year}` | Year |
 | `{genre}` | Genre |
 | `{composer}` | Composer |
 | `{bpm}` | BPM |
 
-Tokens that hold a number accept an optional pad width using `{token:N}`:
+**Multiple artists** — for files with more than one artist (e.g. FLAC), append a 1-based index to pick a specific one:
+
+| Pattern | Artists | Result |
+|---------|---------|--------|
+| `{artist}` | `Alice; Bob` | `Alice` |
+| `{artist:1}` | `Alice; Bob` | `Alice` |
+| `{artist:2}` | `Alice; Bob` | `Bob` |
+
+`{artist}` and `{artist:1}` are equivalent and always return the primary artist. Returns an empty string if the index exceeds the number of artists. `{album_artist}` supports the same syntax.
+
+**Zero-padding** — numeric tokens accept an optional pad width:
 
 | Pattern | Tag value | Result |
 |---------|-----------|--------|
@@ -79,7 +89,11 @@ Config location:
 | macOS | `~/Library/Application Support/ferrotag/rules.json` |
 | Windows | `%APPDATA%\ferrotag\rules.json` |
 
-Each rule has a `field` and an `op`:
+Each rule targets a `field` and specifies one or more ops to run on it.
+
+Rules run top to bottom. Any extra keys (such as `_README`) are ignored, and individual invalid rules are skipped with a warning rather than failing the whole file.
+
+### Single op
 
 ```json
 {
@@ -92,19 +106,75 @@ Each rule has a `field` and an `op`:
 }
 ```
 
-Rules run top to bottom. Any extra keys (such as `_README`) are ignored, and individual invalid rules are skipped with a warning rather than failing the whole file.
+### Multiple ops on one field
 
-Available ops:
+Pass an array to `op`. Bare strings work for ops that need no parameters; use an object for ops that take parameters:
+
+```json
+{
+  "rules": [
+    {
+      "field": "track_number",
+      "op": ["trim", { "op": "pad", "width": 2 }]
+    }
+  ]
+}
+```
+
+Ops in the array run left to right, each receiving the output of the previous one.
+
+### Wildcard field
+
+Use `"*"` as the field to apply an op to every field at once:
+
+```json
+{
+  "rules": [
+    { "field": "*", "op": "trim" }
+  ]
+}
+```
+
+Putting the wildcard rule first means all fields are trimmed before your field-specific rules run.
+
+### Copy from another field
+
+The `copy` op sets a field to the current value of another field:
+
+```json
+{
+  "rules": [
+    { "field": "*",           "op": "trim" },
+    { "field": "sort_artist", "op": { "op": "copy", "from": "artist" } }
+  ]
+}
+```
+
+`copy` reads from the in-progress state, so it picks up values already modified by earlier rules in the same run. It can also be combined with other ops in an array:
+
+```json
+{
+  "rules": [
+    {
+      "field": "sort_artist",
+      "op": [{ "op": "copy", "from": "artist" }, "trim"]
+    }
+  ]
+}
+```
+
+### Available ops
 
 | Op | Extra key | Effect |
 |----|-----------|--------|
+| `trim` | — | Removes leading/trailing whitespace |
 | `blank` | — | Clears the field |
-| `set` | `value` | Sets the field to a fixed string (omit `value` to clear) |
+| `set` | `value` | Sets the field to a fixed string |
 | `pad` | `width` | Zero-pads a number to `width` digits (`3` → `03`, `3/12` → `03/12`); non-numeric values are left as-is |
 | `yearOnly` | — | Reduces a date to its first 4-digit year (`2021-05-13` → `2021`) |
-| `trim` | — | Removes leading/trailing whitespace |
+| `copy` | `from` | Copies the value of another field into this one |
 
-Available fields:
+### Available fields
 
 `title`, `artist`, `album`, `album_artist`, `genre`, `composer`, `track_number`, `disc_number`, `bpm`, `year`, `year_legacy`, `release_date`, `original_release_date`, `comment`, `description`, `lyricist`, `conductor`, `arranger`, `remixer`, `copyright`, `encoded_by`, `sort_title`, `sort_artist`, `sort_album`, `sort_album_artist`
 

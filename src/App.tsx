@@ -111,6 +111,12 @@ const ICONS = {
       <path d="M9 4v16" />
     </>
   ),
+  arrowRight: (
+    <>
+      <path d="M5 12h14" />
+      <path d="M12 5l7 7-7 7" />
+    </>
+  ),
 };
 
 type MetadataSide = "left" | "right";
@@ -459,6 +465,49 @@ export default function App() {
     );
   }, []);
 
+  // Rename all loaded files using the current pattern without saving any tag changes.
+  const handleRenameOnly = useCallback(async () => {
+    if (!renamePattern.trim() || rows.length === 0) return;
+
+    const pathUpdates = new Map<string, string>();
+
+    for (const row of rows) {
+      const newFilename = applyRenamePattern(renamePattern, row.tags, row.path);
+      const lastSep = Math.max(row.path.lastIndexOf("/"), row.path.lastIndexOf("\\"));
+      const dir = lastSep >= 0 ? row.path.slice(0, lastSep + 1) : "";
+      const newPath = dir + newFilename;
+      if (newPath !== row.path) {
+        try {
+          await invoke("rename_file", { from: row.path, to: newPath });
+          pathUpdates.set(row.id, newPath);
+        } catch {
+          // skip on conflict
+        }
+      }
+    }
+
+    if (pathUpdates.size === 0) {
+      setNotice("Nothing to rename.");
+      return;
+    }
+
+    setRows((prev) =>
+      prev.map((r) => {
+        const newPath = pathUpdates.get(r.id);
+        if (!newPath) return r;
+        return { ...r, id: newPath, path: newPath, file: newPath.split(/[/\\]/).pop() ?? newPath };
+      }),
+    );
+
+    setSelectedIds((prev) => {
+      const next = new Set<string>();
+      for (const id of prev) next.add(pathUpdates.get(id) ?? id);
+      return next;
+    });
+
+    setNotice(`Renamed ${pathUpdates.size} file${pathUpdates.size === 1 ? "" : "s"}.`);
+  }, [rows, renamePattern]);
+
   // Open the rules.json file in the user's default editor.
   const handleEditRules = useCallback(async () => {
     try {
@@ -647,6 +696,14 @@ export default function App() {
                 </button>
               )}
             </div>
+            <button
+              className="tbtn"
+              disabled={!renamePattern.trim() || rows.length === 0}
+              onClick={handleRenameOnly}
+              title="Rename all loaded files now using this pattern (no tag changes)"
+            >
+              <Icon d={ICONS.arrowRight} />
+            </button>
           </div>
         </div>
         <div className="toolbar__sep" />
