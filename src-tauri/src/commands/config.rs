@@ -14,7 +14,11 @@ const DEFAULT_CONFIG: &str = include_str!("../../resources/default-rules.json");
 // directory (Windows: %APPDATA%\ferrotag, macOS: ~/Library/Application Support/ferrotag,
 // Linux: ~/.config/ferrotag), creating the directory (but not the file) if needed.
 fn config_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let dir = app.path().config_dir().map_err(|e| e.to_string())?.join("ferrotag");
+    let dir = app
+        .path()
+        .config_dir()
+        .map_err(|e| e.to_string())?
+        .join("ferrotag");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir.join(CONFIG_FILE))
 }
