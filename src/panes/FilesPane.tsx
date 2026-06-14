@@ -13,6 +13,7 @@ interface FilesPaneProps {
   onSort: (key: SortKey, dir: SortDir) => void;
   onSelect: (ids: Set<string>) => void;
   onRenameSelected: (ids: Set<string>) => void;
+  onApplyRulesToSelected: (ids: Set<string>) => void;
 }
 
 interface CtxMenu {
@@ -89,6 +90,7 @@ export default function FilesPane({
   onSort,
   onSelect,
   onRenameSelected,
+  onApplyRulesToSelected,
 }: FilesPaneProps) {
   const lastClickRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -254,6 +256,16 @@ export default function FilesPane({
           style={{ left: ctxMenu.x, top: ctxMenu.y }}
           onPointerDown={(e) => e.stopPropagation()}
         >
+          <button
+            className="ctx-menu__item"
+            onClick={() => {
+              onApplyRulesToSelected(ctxMenu.ids);
+              setCtxMenu(null);
+            }}
+          >
+            Apply rules to {ctxMenu.ids.size} file
+            {ctxMenu.ids.size !== 1 ? "s" : ""}
+          </button>
           <button
             className="ctx-menu__item"
             disabled={!renamePattern.trim()}

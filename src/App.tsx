@@ -499,62 +499,68 @@ export default function App() {
 
   // Read the rules.json config and apply every rule to all loaded files,
   // marking changed rows dirty so they're picked up by the next Save.
-  const handleApplyRules = useCallback(async () => {
-    if (rowsRef.current.length === 0) {
-      setNotice("Open some files first, then apply rules.");
-      return;
-    }
-    let raw: string;
-    try {
-      raw = await invoke<string>("read_rules");
-    } catch (e) {
-      setNotice(`Couldn't read rules file: ${e}`);
-      return;
-    }
-    let parsed;
-    try {
-      parsed = parseRuleSet(raw);
-    } catch (e) {
-      setNotice(
-        `Invalid rules file: ${e instanceof Error ? e.message : String(e)}`,
+  // Apply rules to loaded files. Pass a Set of IDs to target only those rows;
+  // omit to apply to all loaded files.
+  const handleApplyRules = useCallback(
+    async (filterIds?: Set<string>) => {
+      if (rowsRef.current.length === 0) {
+        setNotice("Open some files first, then apply rules.");
+        return;
+      }
+      let raw: string;
+      try {
+        raw = await invoke<string>("read_rules");
+      } catch (e) {
+        setNotice(`Couldn't read rules file: ${e}`);
+        return;
+      }
+      let parsed;
+      try {
+        parsed = parseRuleSet(raw);
+      } catch (e) {
+        setNotice(
+          `Invalid rules file: ${e instanceof Error ? e.message : String(e)}`,
+        );
+        return;
+      }
+      if (parsed.ruleset.rules.length === 0) {
+        setNotice(
+          parsed.warnings.length > 0
+            ? `No usable rules (${parsed.warnings.length} skipped — check the file).`
+            : `No rules defined. Add rules to: ${rulesPath}`,
+        );
+        return;
+      }
+
+      const current = rowsRef.current;
+      const updated = current.map((row) => {
+        if (filterIds && !filterIds.has(row.id)) return row;
+        const tags = applyRulesToTags(row.tags, parsed.ruleset);
+        if (!isTagsDirty(tags, row.tags)) return row;
+        return {
+          ...row,
+          tags,
+          modified: isTagsDirty(tags, row.orig) || !!row.pendingArtPath,
+        };
+      });
+      const changed = updated.reduce(
+        (n, r, i) => n + (r !== current[i] ? 1 : 0),
+        0,
       );
-      return;
-    }
-    if (parsed.ruleset.rules.length === 0) {
-      setNotice(
+      setRows(updated);
+
+      const skipped =
         parsed.warnings.length > 0
-          ? `No usable rules (${parsed.warnings.length} skipped — check the file).`
-          : "No rules defined. Use Edit → Edit Rules File… to set some up.",
+          ? ` (${parsed.warnings.length} rule(s) skipped)`
+          : "";
+      setNotice(
+        changed > 0
+          ? `Applied rules to ${changed} file${changed === 1 ? "" : "s"}${skipped}.`
+          : `Rules applied — nothing to change${skipped}.`,
       );
-      return;
-    }
-
-    const current = rowsRef.current;
-    const updated = current.map((row) => {
-      const tags = applyRulesToTags(row.tags, parsed.ruleset);
-      if (!isTagsDirty(tags, row.tags)) return row; // unchanged by rules
-      return {
-        ...row,
-        tags,
-        modified: isTagsDirty(tags, row.orig) || !!row.pendingArtPath,
-      };
-    });
-    const changed = updated.reduce(
-      (n, r, i) => n + (r !== current[i] ? 1 : 0),
-      0,
-    );
-    setRows(updated);
-
-    const skipped =
-      parsed.warnings.length > 0
-        ? ` (${parsed.warnings.length} rule(s) skipped)`
-        : "";
-    setNotice(
-      changed > 0
-        ? `Applied rules to ${changed} file${changed === 1 ? "" : "s"}${skipped}.`
-        : `Rules applied — nothing to change${skipped}.`,
-    );
-  }, []);
+    },
+    [rulesPath],
+  );
 
   // Rename files using the current pattern without saving any tag changes.
   // Pass a Set of IDs to rename only those rows; omit to rename all loaded files.
@@ -714,7 +720,7 @@ export default function App() {
         setRows([]);
         setSelectedIds(new Set());
       }),
-      listen("menu-apply-rules", () => handleApplyRulesRef.current()),
+      listen("menu-apply-rules", () => handleApplyRulesRef.current(undefined)),
       listen<boolean>("context-menu-registered", (e) => {
         setNotice(
           e.payload
@@ -790,7 +796,7 @@ export default function App() {
           <button
             className="tbtn"
             disabled={rows.length === 0}
-            onClick={handleApplyRules}
+            onClick={() => handleApplyRules()}
             title={`Apply your rules.json transforms to every loaded file (then Save)${rulesPath ? `\n\nRules file: ${rulesPath}` : ""}`}
           >
             <Icon d={ICONS.wand} />
@@ -893,6 +899,7 @@ export default function App() {
                 onSort={(key, dir) => setSort({ key, dir })}
                 onSelect={handleSelect}
                 onRenameSelected={handleRenameOnly}
+                onApplyRulesToSelected={handleApplyRules}
               />
             </ResizablePanel>
           );
