@@ -10,7 +10,7 @@ A fast, minimal desktop music tag editor built with Tauri, React, and Rust.
 - Open individual files or entire folders via the file picker, or drag and drop either onto the window
 - Batch edit — select multiple tracks and update shared fields at once
 - Album art — embed, replace, extract, or remove cover art; drag an image onto the art well to set it
-- File renamer — rename files on save or instantly (without saving tags) using patterns like `{artist} – {track_number:2} – {title}`; supports `{artist:2}` for multi-artist files; pattern persists between sessions
+- File renamer — rename files on save or instantly (without saving tags) using patterns like `{artist} – {track_number:2} – {title}`; supports `{artist:2}` for multi-artist files and `[, {artist:2}]` optional segments that are dropped when a value is absent; pattern persists between sessions
 - Metadata rules — batch-transform tags via an optional `rules.json`: trim whitespace globally, zero-pad numbers, extract year from dates, copy one field to another, and more; supports multiple ops per field and a `*` wildcard to target all fields at once
 - Extended tag support: credits, sort fields, dates, BPM, comments, and more
 - Virtualised file list — smooth scrolling for libraries of any size
@@ -61,6 +61,17 @@ Available tokens:
 
 `{artist}` and `{artist:1}` are equivalent and always return the primary artist. Returns an empty string if the index exceeds the number of artists. `{album_artist}` supports the same syntax.
 
+**Optional segments** — wrap any part of the pattern in `[...]` to make it conditional. The entire segment (including surrounding literals) is omitted when any token inside it resolves to an empty string:
+
+| Pattern | Artists | Result |
+|---------|---------|--------|
+| `{artist:1}[, {artist:2}]` | `Alice` | `Alice` |
+| `{artist:1}[, {artist:2}]` | `Alice; Bob` | `Alice, Bob` |
+| `{track_number:2} - {artist:1}[, {artist:2}] - {title}` | `Alice` | `01 - Alice - Title` |
+| `{track_number:2} - {artist:1}[, {artist:2}] - {title}` | `Alice; Bob` | `01 - Alice, Bob - Title` |
+
+You can nest multiple tokens inside a single segment — it is dropped if **any** of them is empty.
+
 **Zero-padding** — numeric tokens accept an optional pad width:
 
 | Pattern | Tag value | Result |
@@ -79,7 +90,7 @@ The original file extension is always preserved. Characters illegal in filenames
 
 Rules let you batch-clean tags across every loaded file. Choose **Edit → Apply Rules to All** to run them, then **Save** to write the changes to disk (nothing is written until you save).
 
-Rules are **optional** and require no setup — there are no rules out of the box, so Apply Rules does nothing until you add some. To customize them, choose **Edit → Edit Rules File…**, which creates `rules.json` (if it doesn't exist yet) and opens it in your default editor. The file is self-documenting.
+Rules are **optional** and require no setup — there are no rules out of the box, so Apply Rules does nothing until you add some. To customize them, create or edit `rules.json` at the path shown in the **Apply Rules** button tooltip. The file is self-documenting.
 
 Config location:
 
