@@ -21,6 +21,30 @@ const TOKENS: Record<string, (tags: EditableTags) => string> = {
 
 export const RENAME_TOKEN_LIST = Object.keys(TOKENS).map((k) => `{${k}}`);
 
+const TOKEN_RE = /\{(\w+)(?::(\d+))?\}/g;
+
+// Resolve a single {token} or {token:N} to its string value.
+// Returns "" when the token resolves to an empty value.
+// Returns the original "{key}" text for unknown tokens.
+function resolveToken(
+  key: string,
+  numStr: string | undefined,
+  tags: EditableTags,
+): string {
+  const fn_ = TOKENS[key];
+  if (!fn_) return `{${key}}`;
+  const value = fn_(tags);
+  const num = numStr !== undefined ? parseInt(numStr, 10) : undefined;
+  if (MULTI_VALUE_TOKENS.has(key)) {
+    const idx = (num ?? 1) - 1;
+    return value.split("; ")[idx]?.trim() ?? "";
+  }
+  if (num !== undefined && /^\d+$/.test(value)) {
+    return value.padStart(num, "0");
+  }
+  return value;
+}
+
 export function applyRenamePattern(
   pattern: string,
   tags: EditableTags,
@@ -29,24 +53,26 @@ export function applyRenamePattern(
   const ext = currentPath.split(".").pop() ?? "";
   const originalFilename = currentPath.split(/[/\\]/).pop() ?? currentPath;
 
-  // {token:N} — for multi-value tokens (artist, album_artist) N is a 1-based index;
-  // for numeric tokens (track_number, disc_number) N is a zero-pad width.
-  let stem = pattern.replace(
-    /\{(\w+)(?::(\d+))?\}/g,
-    (_, key: string, numStr: string | undefined) => {
-      const fn_ = TOKENS[key];
-      if (!fn_) return `{${key}}`;
-      const value = fn_(tags);
-      const num = numStr !== undefined ? parseInt(numStr, 10) : undefined;
-      if (MULTI_VALUE_TOKENS.has(key)) {
-        const idx = (num ?? 1) - 1;
-        return value.split("; ")[idx]?.trim() ?? "";
-      }
-      if (num !== undefined && /^\d+$/.test(value)) {
-        return value.padStart(num, "0");
-      }
-      return value;
-    },
+  // Optional segments [...] are only included when every token inside resolves
+  // to a non-empty string.  Use this to attach surrounding punctuation/spaces
+  // that should disappear when a value is absent.
+  // Example: {artist:1}[, {artist:2}] — the ", " is dropped for single-artist tracks.
+  let stem = pattern.replace(/\[([^\]]*)\]/g, (_, inner: string) => {
+    let empty = false;
+    const rendered = inner.replace(
+      TOKEN_RE,
+      (_, key: string, numStr?: string) => {
+        const v = resolveToken(key, numStr, tags);
+        if (!v || v.startsWith("{")) empty = true;
+        return v;
+      },
+    );
+    return empty ? "" : rendered;
+  });
+
+  // Regular (non-optional) tokens
+  stem = stem.replace(TOKEN_RE, (_, key: string, numStr?: string) =>
+    resolveToken(key, numStr, tags),
   );
 
   stem = stem.replace(ILLEGAL_CHARS, "");
