@@ -20,7 +20,7 @@ interface OpDef {
   op: RuleOpName;
   value?: string; // "set"
   width?: number; // "pad"
-  from?: string;  // "copy"
+  from?: string; // "copy"
 }
 
 export interface Rule {
@@ -65,16 +65,28 @@ const FIELD_MAP: Record<string, keyof EditableTags> = {
   sort_album_artist: "sortAlbumArtist",
 };
 
-const VALID_OPS: RuleOpName[] = ["blank", "set", "pad", "yearOnly", "trim", "copy"];
+const VALID_OPS: RuleOpName[] = [
+  "blank",
+  "set",
+  "pad",
+  "yearOnly",
+  "trim",
+  "copy",
+];
 
 function resolveField(name: unknown): keyof EditableTags | null {
   if (typeof name !== "string") return null;
   if (name in FIELD_MAP) return FIELD_MAP[name];
-  if ((Object.values(FIELD_MAP) as string[]).includes(name)) return name as keyof EditableTags;
+  if ((Object.values(FIELD_MAP) as string[]).includes(name))
+    return name as keyof EditableTags;
   return null;
 }
 
-function validateOpDef(r: Record<string, unknown>, label: string, warnings: string[]): OpDef | null {
+function validateOpDef(
+  r: Record<string, unknown>,
+  label: string,
+  warnings: string[],
+): OpDef | null {
   const op = r.op as RuleOpName;
   if (!VALID_OPS.includes(op)) {
     warnings.push(`${label}: unknown op "${op}" — skipped`);
@@ -88,19 +100,30 @@ function validateOpDef(r: Record<string, unknown>, label: string, warnings: stri
     warnings.push(`${label}: "copy" needs a valid "from" field name — skipped`);
     return null;
   }
-  return { op, value: r.value as string | undefined, width: r.width as number | undefined, from: r.from as string | undefined };
+  return {
+    op,
+    value: r.value as string | undefined,
+    width: r.width as number | undefined,
+    from: r.from as string | undefined,
+  };
 }
 
 // Parses one item from an op array. Strings are bare op names (for ops that
 // need no params); objects use the same {op, ...params} shape as a top-level rule.
-function parseOpSpec(item: unknown, label: string, warnings: string[]): OpDef | null {
+function parseOpSpec(
+  item: unknown,
+  label: string,
+  warnings: string[],
+): OpDef | null {
   if (typeof item === "string") {
     if (!VALID_OPS.includes(item as RuleOpName)) {
       warnings.push(`${label}: unknown op "${item}" — skipped`);
       return null;
     }
     if (item === "pad" || item === "set" || item === "copy") {
-      warnings.push(`${label}: "${item}" requires params — use {"op": "${item}", ...} — skipped`);
+      warnings.push(
+        `${label}: "${item}" requires params — use {"op": "${item}", ...} — skipped`,
+      );
       return null;
     }
     return { op: item as RuleOpName };
@@ -119,9 +142,15 @@ export function parseRuleSet(raw: string): ParsedRules {
   try {
     data = JSON.parse(raw);
   } catch (e) {
-    throw new Error(`not valid JSON (${e instanceof Error ? e.message : String(e)})`);
+    throw new Error(
+      `not valid JSON (${e instanceof Error ? e.message : String(e)})`,
+    );
   }
-  if (typeof data !== "object" || data === null || !Array.isArray((data as any).rules)) {
+  if (
+    typeof data !== "object" ||
+    data === null ||
+    !Array.isArray((data as any).rules)
+  ) {
     throw new Error('missing a "rules" array');
   }
 
@@ -181,11 +210,16 @@ function yearOnly(value: string): string {
 // earlier rules in the same run.
 function applyOp(value: string, def: OpDef, tags: EditableTags): string {
   switch (def.op) {
-    case "blank":   return "";
-    case "set":     return def.value ?? "";
-    case "trim":    return value.trim();
-    case "pad":     return pad(value, def.width ?? 2);
-    case "yearOnly": return yearOnly(value);
+    case "blank":
+      return "";
+    case "set":
+      return def.value ?? "";
+    case "trim":
+      return value.trim();
+    case "pad":
+      return pad(value, def.width ?? 2);
+    case "yearOnly":
+      return yearOnly(value);
     case "copy": {
       const srcKey = resolveField(def.from ?? "");
       return srcKey !== null ? tags[srcKey] : value;
@@ -196,12 +230,18 @@ function applyOp(value: string, def: OpDef, tags: EditableTags): string {
 const ALL_FIELDS = [...new Set(Object.values(FIELD_MAP))];
 
 // Applies every rule (top to bottom) to a copy of the tags, returning the result.
-export function applyRulesToTags(tags: EditableTags, ruleset: RuleSet): EditableTags {
+export function applyRulesToTags(
+  tags: EditableTags,
+  ruleset: RuleSet,
+): EditableTags {
   const next = { ...tags };
   for (const rule of ruleset.rules) {
-    const keys: (keyof EditableTags)[] = rule.field === "*"
-      ? ALL_FIELDS
-      : [resolveField(rule.field)].filter((k): k is keyof EditableTags => k !== null);
+    const keys: (keyof EditableTags)[] =
+      rule.field === "*"
+        ? ALL_FIELDS
+        : [resolveField(rule.field)].filter(
+            (k): k is keyof EditableTags => k !== null,
+          );
     for (const key of keys) {
       for (const def of rule.ops) {
         next[key] = applyOp(next[key], def, next);

@@ -1,9 +1,9 @@
 use crate::metadata::track::{read_track, TrackMetadata};
+use jwalk::WalkDir;
 use rayon::prelude::*;
 use std::path::Path;
 use std::sync::mpsc;
 use tauri::ipc::Channel;
-use walkdir::WalkDir;
 
 fn is_audio_file(path: &Path) -> bool {
     matches!(
@@ -18,7 +18,7 @@ fn collect_paths(paths: Vec<String>) -> Vec<String> {
         let p = Path::new(&path);
         if p.is_dir() {
             for entry in WalkDir::new(p).into_iter().flatten() {
-                if is_audio_file(entry.path()) {
+                if is_audio_file(&entry.path()) {
                     if let Some(s) = entry.path().to_str() {
                         candidates.push(s.to_string());
                     }

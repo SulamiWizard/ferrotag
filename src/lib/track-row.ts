@@ -32,21 +32,28 @@ export interface EditableTags {
 
 // A loaded track decorated with per-track editable state for dirty tracking.
 export interface TrackRow {
-  id: string;            // = path, stable unique key
+  id: string; // = path, stable unique key
   path: string;
-  file: string;          // filename portion of path
-  fmt: string;           // format derived from extension (FLAC, MP3, …)
-  size: number;          // file size in bytes
+  file: string; // filename portion of path
+  fmt: string; // format derived from extension (FLAC, MP3, …)
+  size: number; // file size in bytes
   // artUrl: undefined = not yet loaded; null = loaded, no art; string = data URI
-  tags: EditableTags;    // live editable copy
-  orig: EditableTags;    // pristine snapshot (updated on save)
+  tags: EditableTags; // live editable copy
+  orig: EditableTags; // pristine snapshot (updated on save)
   modified: boolean;
   artUrl: string | null | undefined;
   pendingArtPath: string | null;
   pendingArtRemove: boolean;
 }
 
-export type SortKey = "trackNo" | "title" | "artist" | "album" | "year" | "genre" | "fmt";
+export type SortKey =
+  | "trackNo"
+  | "title"
+  | "artist"
+  | "album"
+  | "year"
+  | "genre"
+  | "fmt";
 export type SortDir = "asc" | "desc";
 
 export function trackToRow(t: Track): TrackRow {
@@ -98,7 +105,17 @@ function trackToTags(t: Track): EditableTags {
 
 export function pathToFormat(path: string): string {
   const ext = (path.split(".").pop() ?? "").toUpperCase();
-  return ["FLAC", "WAV", "MP3", "M4A", "OGG", "AIFF", "APE", "OPUS", "WV"].includes(ext)
+  return [
+    "FLAC",
+    "WAV",
+    "MP3",
+    "M4A",
+    "OGG",
+    "AIFF",
+    "APE",
+    "OPUS",
+    "WV",
+  ].includes(ext)
     ? ext
     : "AUDIO";
 }
@@ -106,14 +123,19 @@ export function pathToFormat(path: string): string {
 // Sentinel string for "multiple differing values" in a batch selection.
 export const MULTI = "​__MULTI__";
 
-export function sharedTagValue(rows: TrackRow[], key: keyof EditableTags): string {
+export function sharedTagValue(
+  rows: TrackRow[],
+  key: keyof EditableTags,
+): string {
   if (rows.length === 0) return "";
   const first = rows[0].tags[key];
   return rows.every((r) => r.tags[key] === first) ? first : MULTI;
 }
 
 export function isTagsDirty(tags: EditableTags, orig: EditableTags): boolean {
-  return (Object.keys(tags) as Array<keyof EditableTags>).some((k) => tags[k] !== orig[k]);
+  return (Object.keys(tags) as Array<keyof EditableTags>).some(
+    (k) => tags[k] !== orig[k],
+  );
 }
 
 function cmpAlbumTrack(a: TrackRow, b: TrackRow): number {
@@ -132,18 +154,20 @@ function cmpAlbumTrack(a: TrackRow, b: TrackRow): number {
 // Secondary sort applied when the primary key produces a tie.
 // Keeps tracks within the same album in disc/track order regardless of
 // which column is sorted.
-const SECONDARY: Partial<Record<SortKey, (a: TrackRow, b: TrackRow) => number>> = {
+const SECONDARY: Partial<
+  Record<SortKey, (a: TrackRow, b: TrackRow) => number>
+> = {
   artist: (a, b) => cmpAlbumTrack(a, b),
-  album:  (a, b) => cmpAlbumTrack(a, b),
-  year:   (a, b) => cmpAlbumTrack(a, b),
-  genre:  (a, b) => {
+  album: (a, b) => cmpAlbumTrack(a, b),
+  year: (a, b) => cmpAlbumTrack(a, b),
+  genre: (a, b) => {
     const artistA = a.tags.artist.toLowerCase();
     const artistB = b.tags.artist.toLowerCase();
     if (artistA < artistB) return -1;
     if (artistA > artistB) return 1;
     return cmpAlbumTrack(a, b);
   },
-  fmt:    (a, b) => {
+  fmt: (a, b) => {
     const artistA = a.tags.artist.toLowerCase();
     const artistB = b.tags.artist.toLowerCase();
     if (artistA < artistB) return -1;
@@ -157,7 +181,11 @@ const SECONDARY: Partial<Record<SortKey, (a: TrackRow, b: TrackRow) => number>> 
   },
 };
 
-export function sortedRows(rows: TrackRow[], key: SortKey, dir: SortDir): TrackRow[] {
+export function sortedRows(
+  rows: TrackRow[],
+  key: SortKey,
+  dir: SortDir,
+): TrackRow[] {
   return [...rows].sort((a, b) => {
     let va: string | number, vb: string | number;
     if (key === "trackNo") {
@@ -187,14 +215,23 @@ export function sortedRows(rows: TrackRow[], key: SortKey, dir: SortDir): TrackR
 
 // Build the partial changes record to pass to Tauri's save_track.
 // Only includes fields that differ from the orig snapshot.
-export function buildSaveChanges(tags: EditableTags, orig: EditableTags): Record<string, unknown> {
+export function buildSaveChanges(
+  tags: EditableTags,
+  orig: EditableTags,
+): Record<string, unknown> {
   const c: Record<string, unknown> = {};
   if (tags.title !== orig.title) c.title = tags.title;
   if (tags.artist !== orig.artist)
-    c.artists = tags.artist.split("; ").map((s) => s.trim()).filter(Boolean);
+    c.artists = tags.artist
+      .split("; ")
+      .map((s) => s.trim())
+      .filter(Boolean);
   if (tags.album !== orig.album) c.album = tags.album;
   if (tags.albumArtist !== orig.albumArtist)
-    c.album_artists = tags.albumArtist.split("; ").map((s) => s.trim()).filter(Boolean);
+    c.album_artists = tags.albumArtist
+      .split("; ")
+      .map((s) => s.trim())
+      .filter(Boolean);
   if (tags.year !== orig.year) c.recording_date = tags.year;
   if (tags.yearLegacy !== orig.yearLegacy) c.year = tags.yearLegacy;
   if (tags.releaseDate !== orig.releaseDate) c.release_date = tags.releaseDate;
@@ -216,6 +253,7 @@ export function buildSaveChanges(tags: EditableTags, orig: EditableTags): Record
   if (tags.sortTitle !== orig.sortTitle) c.sort_title = tags.sortTitle;
   if (tags.sortArtist !== orig.sortArtist) c.sort_artist = tags.sortArtist;
   if (tags.sortAlbum !== orig.sortAlbum) c.sort_album = tags.sortAlbum;
-  if (tags.sortAlbumArtist !== orig.sortAlbumArtist) c.sort_album_artist = tags.sortAlbumArtist;
+  if (tags.sortAlbumArtist !== orig.sortAlbumArtist)
+    c.sort_album_artist = tags.sortAlbumArtist;
   return c;
 }

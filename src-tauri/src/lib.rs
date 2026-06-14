@@ -47,7 +47,6 @@ pub fn run() {
                         .text("clear", "Clear List")
                         .separator()
                         .text("apply_rules", "Apply Rules to All")
-                        .text("edit_rules", "Edit Rules File…")
                         .build()?,
                 )
                 .build()?;
@@ -70,9 +69,6 @@ pub fn run() {
                 "apply_rules" => {
                     let _ = app.emit("menu-apply-rules", ());
                 }
-                "edit_rules" => {
-                    let _ = app.emit("menu-edit-rules", ());
-                }
                 "quit" => {
                     app.exit(0);
                 }
@@ -90,7 +86,6 @@ pub fn run() {
             });
             Ok(())
         })
-        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             get_startup_path,

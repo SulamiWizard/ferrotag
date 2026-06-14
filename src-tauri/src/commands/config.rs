@@ -36,14 +36,9 @@ pub fn read_rules(app: tauri::AppHandle) -> Result<String, String> {
     }
 }
 
-// Returns the absolute path to the rules file for editing. This is the explicit
-// "I want to customize" path, so here we DO materialize the file from the
-// documented defaults if it's missing — giving the user something to open.
+// Returns the absolute path to rules.json for display purposes (e.g. tooltips).
+// Does not create the file.
 #[tauri::command]
 pub fn get_rules_path(app: tauri::AppHandle) -> Result<String, String> {
-    let path = config_path(&app)?;
-    if !path.exists() {
-        fs::write(&path, DEFAULT_CONFIG).map_err(|e| e.to_string())?;
-    }
-    Ok(path.to_string_lossy().to_string())
+    Ok(config_path(&app)?.to_string_lossy().to_string())
 }

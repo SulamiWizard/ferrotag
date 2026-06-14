@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { openPath } from "@tauri-apps/plugin-opener";
 import "./App.css";
 
 import FilesPane from "./panes/FilesPane";
@@ -30,7 +29,8 @@ import { parseRuleSet, applyRulesToTags } from "@/lib/rules";
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024 * 1024)
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
@@ -39,7 +39,17 @@ interface DragDropPayload {
 }
 
 const ART_EXTENSIONS = ["jpg", "jpeg", "png", "gif", "webp", "bmp"];
-const AUDIO_EXTENSIONS = ["mp3", "flac", "ogg", "m4a", "wav", "aiff", "ape", "opus", "wv"];
+const AUDIO_EXTENSIONS = [
+  "mp3",
+  "flac",
+  "ogg",
+  "m4a",
+  "wav",
+  "aiff",
+  "ape",
+  "opus",
+  "wv",
+];
 
 function Icon({ d, size = 16 }: { d: React.ReactNode; size?: number }) {
   return (
@@ -59,7 +69,9 @@ function Icon({ d, size = 16 }: { d: React.ReactNode; size?: number }) {
 }
 
 const ICONS = {
-  folder: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />,
+  folder: (
+    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+  ),
   file: (
     <>
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -136,13 +148,24 @@ function loadRenamePattern(): string {
 export default function App() {
   const [rows, setRows] = useState<TrackRow[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "trackNo", dir: "asc" });
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({
+    key: "trackNo",
+    dir: "asc",
+  });
   const [search, setSearch] = useState("");
   const [renamePattern, setRenamePattern] = useState(loadRenamePattern);
   const [scrollToId, setScrollToId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [metadataSide, setMetadataSide] = useState<MetadataSide>(loadMetadataSide);
+  const [metadataSide, setMetadataSide] =
+    useState<MetadataSide>(loadMetadataSide);
+  const [rulesPath, setRulesPath] = useState("");
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    invoke<string>("get_rules_path")
+      .then(setRulesPath)
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(METADATA_SIDE_KEY, metadataSide);
@@ -157,9 +180,13 @@ export default function App() {
     if (search.trim()) {
       const q = search.toLowerCase();
       r = r.filter((row) =>
-        [row.file, row.tags.title, row.tags.artist, row.tags.album, row.tags.genre].some((v) =>
-          v.toLowerCase().includes(q),
-        ),
+        [
+          row.file,
+          row.tags.title,
+          row.tags.artist,
+          row.tags.album,
+          row.tags.genre,
+        ].some((v) => v.toLowerCase().includes(q)),
       );
     }
     return sortedRows(r, sort.key, sort.dir);
@@ -168,8 +195,16 @@ export default function App() {
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
 
-  const selRows = useMemo(() => rows.filter((r) => selectedIds.has(r.id)), [rows, selectedIds]);
-  const dirtyCount = useMemo(() => rows.filter((r) => r.modified || r.pendingArtPath || r.pendingArtRemove).length, [rows]);
+  const selRows = useMemo(
+    () => rows.filter((r) => selectedIds.has(r.id)),
+    [rows, selectedIds],
+  );
+  const dirtyCount = useMemo(
+    () =>
+      rows.filter((r) => r.modified || r.pendingArtPath || r.pendingArtRemove)
+        .length,
+    [rows],
+  );
 
   // Streams tracks from Rust via a Channel, rendering each batch of 25 as it
   // arrives. Art is not pre-loaded here — it loads lazily on selection.
@@ -190,15 +225,22 @@ export default function App() {
   }, []);
 
   // Update a tag field on all selected rows and recompute their dirty flag.
-  const applyEdit = useCallback((key: keyof EditableTags, value: string) => {
-    setRows((prev) =>
-      prev.map((row) => {
-        if (!selectedIds.has(row.id)) return row;
-        const tags = { ...row.tags, [key]: value };
-        return { ...row, tags, modified: isTagsDirty(tags, row.orig) || !!row.pendingArtPath };
-      }),
-    );
-  }, [selectedIds]);
+  const applyEdit = useCallback(
+    (key: keyof EditableTags, value: string) => {
+      setRows((prev) =>
+        prev.map((row) => {
+          if (!selectedIds.has(row.id)) return row;
+          const tags = { ...row.tags, [key]: value };
+          return {
+            ...row,
+            tags,
+            modified: isTagsDirty(tags, row.orig) || !!row.pendingArtPath,
+          };
+        }),
+      );
+    },
+    [selectedIds],
+  );
 
   // Load art for selected rows that haven't been fetched yet.
   const loadArtForIds = useCallback(async (ids: Set<string>) => {
@@ -212,7 +254,9 @@ export default function App() {
     const updates = new Map(toLoad.map((id, i) => [id, results[i]]));
     setRows((prev) =>
       prev.map((row) =>
-        updates.has(row.id) ? { ...row, artUrl: updates.get(row.id) ?? null } : row,
+        updates.has(row.id)
+          ? { ...row, artUrl: updates.get(row.id) ?? null }
+          : row,
       ),
     );
   }, []);
@@ -227,7 +271,9 @@ export default function App() {
 
   // Save all dirty rows to disk.
   const handleSave = useCallback(async () => {
-    const dirty = rows.filter((r) => r.modified || r.pendingArtPath || r.pendingArtRemove);
+    const dirty = rows.filter(
+      (r) => r.modified || r.pendingArtPath || r.pendingArtRemove,
+    );
     if (dirty.length === 0) return;
 
     const pathUpdates = new Map<string, string>(); // oldId -> newPath
@@ -242,7 +288,10 @@ export default function App() {
         if (row.pendingArtRemove) {
           await invoke("remove_album_art", { audioPaths: [row.path] });
         } else if (row.pendingArtPath) {
-          await invoke("set_album_art", { audioPaths: [row.path], imagePath: row.pendingArtPath });
+          await invoke("set_album_art", {
+            audioPaths: [row.path],
+            imagePath: row.pendingArtPath,
+          });
         }
       } catch (e) {
         console.error(`Failed to save ${row.file}:`, e);
@@ -251,8 +300,15 @@ export default function App() {
       }
 
       if (renamePattern.trim()) {
-        const newFilename = applyRenamePattern(renamePattern, row.tags, row.path);
-        const lastSep = Math.max(row.path.lastIndexOf("/"), row.path.lastIndexOf("\\"));
+        const newFilename = applyRenamePattern(
+          renamePattern,
+          row.tags,
+          row.path,
+        );
+        const lastSep = Math.max(
+          row.path.lastIndexOf("/"),
+          row.path.lastIndexOf("\\"),
+        );
         const dir = lastSep >= 0 ? row.path.slice(0, lastSep + 1) : "";
         const newPath = dir + newFilename;
         if (newPath !== row.path) {
@@ -316,19 +372,31 @@ export default function App() {
       prev.map((r) => {
         if (!r.modified && !r.pendingArtPath && !r.pendingArtRemove) return r;
         // Clear artUrl so the art well resets — actual value reloaded below.
-        const artUrl = (r.pendingArtPath || r.pendingArtRemove) ? undefined : r.artUrl;
-        return { ...r, tags: { ...r.orig }, modified: false, pendingArtPath: null, pendingArtRemove: false, artUrl };
+        const artUrl =
+          r.pendingArtPath || r.pendingArtRemove ? undefined : r.artUrl;
+        return {
+          ...r,
+          tags: { ...r.orig },
+          modified: false,
+          pendingArtPath: null,
+          pendingArtRemove: false,
+          artUrl,
+        };
       }),
     );
 
     if (artToReload.length === 0) return;
     const results = await Promise.all(
-      artToReload.map((id) => invoke<string | null>("load_album_art", { path: id })),
+      artToReload.map((id) =>
+        invoke<string | null>("load_album_art", { path: id }),
+      ),
     );
     const updates = new Map(artToReload.map((id, i) => [id, results[i]]));
     setRows((prev) =>
       prev.map((row) =>
-        updates.has(row.id) ? { ...row, artUrl: updates.get(row.id) ?? null } : row,
+        updates.has(row.id)
+          ? { ...row, artUrl: updates.get(row.id) ?? null }
+          : row,
       ),
     );
   }, []);
@@ -363,7 +431,9 @@ export default function App() {
       filters: [{ name: "Image", extensions: ART_EXTENSIONS }],
     });
     if (!selected || typeof selected !== "string") return;
-    const preview = await invoke<string | null>("read_image", { path: selected });
+    const preview = await invoke<string | null>("read_image", {
+      path: selected,
+    });
     if (!preview) return;
     setRows((prev) =>
       prev.map((row) => {
@@ -381,7 +451,9 @@ export default function App() {
   // Drop art onto the art well.
   const handleArtDrop = async (filePath: string) => {
     if (selRows.length === 0) return;
-    const preview = await invoke<string | null>("read_image", { path: filePath });
+    const preview = await invoke<string | null>("read_image", {
+      path: filePath,
+    });
     if (!preview) return;
     setRows((prev) =>
       prev.map((row) => {
@@ -400,7 +472,12 @@ export default function App() {
     setRows((prev) =>
       prev.map((row) => {
         if (!selectedIds.has(row.id)) return row;
-        return { ...row, artUrl: null, pendingArtPath: null, pendingArtRemove: true };
+        return {
+          ...row,
+          artUrl: null,
+          pendingArtPath: null,
+          pendingArtRemove: true,
+        };
       }),
     );
   }, [selectedIds]);
@@ -412,7 +489,9 @@ export default function App() {
     if (!hasArt) return;
     const destPath = await save({
       defaultPath: "cover.jpg",
-      filters: [{ name: "Image", extensions: ["jpg", "jpeg", "png", "webp", "bmp"] }],
+      filters: [
+        { name: "Image", extensions: ["jpg", "jpeg", "png", "webp", "bmp"] },
+      ],
     });
     if (!destPath) return;
     await invoke("extract_album_art", { audioPath: selRows[0].path, destPath });
@@ -436,7 +515,9 @@ export default function App() {
     try {
       parsed = parseRuleSet(raw);
     } catch (e) {
-      setNotice(`Invalid rules file: ${e instanceof Error ? e.message : String(e)}`);
+      setNotice(
+        `Invalid rules file: ${e instanceof Error ? e.message : String(e)}`,
+      );
       return;
     }
     if (parsed.ruleset.rules.length === 0) {
@@ -452,12 +533,22 @@ export default function App() {
     const updated = current.map((row) => {
       const tags = applyRulesToTags(row.tags, parsed.ruleset);
       if (!isTagsDirty(tags, row.tags)) return row; // unchanged by rules
-      return { ...row, tags, modified: isTagsDirty(tags, row.orig) || !!row.pendingArtPath };
+      return {
+        ...row,
+        tags,
+        modified: isTagsDirty(tags, row.orig) || !!row.pendingArtPath,
+      };
     });
-    const changed = updated.reduce((n, r, i) => n + (r !== current[i] ? 1 : 0), 0);
+    const changed = updated.reduce(
+      (n, r, i) => n + (r !== current[i] ? 1 : 0),
+      0,
+    );
     setRows(updated);
 
-    const skipped = parsed.warnings.length > 0 ? ` (${parsed.warnings.length} rule(s) skipped)` : "";
+    const skipped =
+      parsed.warnings.length > 0
+        ? ` (${parsed.warnings.length} rule(s) skipped)`
+        : "";
     setNotice(
       changed > 0
         ? `Applied rules to ${changed} file${changed === 1 ? "" : "s"}${skipped}.`
@@ -465,58 +556,69 @@ export default function App() {
     );
   }, []);
 
-  // Rename all loaded files using the current pattern without saving any tag changes.
-  const handleRenameOnly = useCallback(async () => {
-    if (!renamePattern.trim() || rows.length === 0) return;
+  // Rename files using the current pattern without saving any tag changes.
+  // Pass a Set of IDs to rename only those rows; omit to rename all loaded files.
+  const handleRenameOnly = useCallback(
+    async (filterIds?: Set<string>) => {
+      if (!renamePattern.trim() || rows.length === 0) return;
 
-    const pathUpdates = new Map<string, string>();
+      const targetRows = filterIds
+        ? rows.filter((r) => filterIds.has(r.id))
+        : rows;
+      const pathUpdates = new Map<string, string>();
 
-    for (const row of rows) {
-      const newFilename = applyRenamePattern(renamePattern, row.tags, row.path);
-      const lastSep = Math.max(row.path.lastIndexOf("/"), row.path.lastIndexOf("\\"));
-      const dir = lastSep >= 0 ? row.path.slice(0, lastSep + 1) : "";
-      const newPath = dir + newFilename;
-      if (newPath !== row.path) {
-        try {
-          await invoke("rename_file", { from: row.path, to: newPath });
-          pathUpdates.set(row.id, newPath);
-        } catch {
-          // skip on conflict
+      for (const row of targetRows) {
+        const newFilename = applyRenamePattern(
+          renamePattern,
+          row.tags,
+          row.path,
+        );
+        const lastSep = Math.max(
+          row.path.lastIndexOf("/"),
+          row.path.lastIndexOf("\\"),
+        );
+        const dir = lastSep >= 0 ? row.path.slice(0, lastSep + 1) : "";
+        const newPath = dir + newFilename;
+        if (newPath !== row.path) {
+          try {
+            await invoke("rename_file", { from: row.path, to: newPath });
+            pathUpdates.set(row.id, newPath);
+          } catch {
+            // skip on conflict
+          }
         }
       }
-    }
 
-    if (pathUpdates.size === 0) {
-      setNotice("Nothing to rename.");
-      return;
-    }
+      if (pathUpdates.size === 0) {
+        setNotice("Nothing to rename.");
+        return;
+      }
 
-    setRows((prev) =>
-      prev.map((r) => {
-        const newPath = pathUpdates.get(r.id);
-        if (!newPath) return r;
-        return { ...r, id: newPath, path: newPath, file: newPath.split(/[/\\]/).pop() ?? newPath };
-      }),
-    );
+      setRows((prev) =>
+        prev.map((r) => {
+          const newPath = pathUpdates.get(r.id);
+          if (!newPath) return r;
+          return {
+            ...r,
+            id: newPath,
+            path: newPath,
+            file: newPath.split(/[/\\]/).pop() ?? newPath,
+          };
+        }),
+      );
 
-    setSelectedIds((prev) => {
-      const next = new Set<string>();
-      for (const id of prev) next.add(pathUpdates.get(id) ?? id);
-      return next;
-    });
+      setSelectedIds((prev) => {
+        const next = new Set<string>();
+        for (const id of prev) next.add(pathUpdates.get(id) ?? id);
+        return next;
+      });
 
-    setNotice(`Renamed ${pathUpdates.size} file${pathUpdates.size === 1 ? "" : "s"}.`);
-  }, [rows, renamePattern]);
-
-  // Open the rules.json file in the user's default editor.
-  const handleEditRules = useCallback(async () => {
-    try {
-      const path = await invoke<string>("get_rules_path");
-      await openPath(path);
-    } catch (e) {
-      setNotice(`Couldn't open rules file: ${e}`);
-    }
-  }, []);
+      setNotice(
+        `Renamed ${pathUpdates.size} file${pathUpdates.size === 1 ? "" : "s"}.`,
+      );
+    },
+    [rows, renamePattern],
+  );
 
   // Stable refs so event listeners (registered once) always call the latest handler.
   const handleSaveRef = useRef(handleSave);
@@ -527,8 +629,6 @@ export default function App() {
   handleArtDropRef.current = handleArtDrop;
   const handleApplyRulesRef = useRef(handleApplyRules);
   handleApplyRulesRef.current = handleApplyRules;
-  const handleEditRulesRef = useRef(handleEditRules);
-  handleEditRulesRef.current = handleEditRules;
   const displayedRef = useRef(displayed);
   displayedRef.current = displayed;
 
@@ -582,18 +682,24 @@ export default function App() {
   // Only when every dropped path is an image is it treated as an art drop.
   useEffect(() => {
     const imageExts = new Set(ART_EXTENSIONS);
-    const isImage = (p: string) => imageExts.has(p.split(".").pop()?.toLowerCase() ?? "");
-    const unlisten = listen<DragDropPayload>("tauri://drag-drop", async (event) => {
-      const paths = event.payload.paths;
-      const nonImagePaths = paths.filter((p) => !isImage(p));
-      if (nonImagePaths.length > 0) {
-        await openTracks(nonImagePaths);
-      } else {
-        const imagePath = paths.find(isImage);
-        if (imagePath) await handleArtDropRef.current(imagePath);
-      }
-    });
-    return () => { unlisten.then((f) => f()); };
+    const isImage = (p: string) =>
+      imageExts.has(p.split(".").pop()?.toLowerCase() ?? "");
+    const unlisten = listen<DragDropPayload>(
+      "tauri://drag-drop",
+      async (event) => {
+        const paths = event.payload.paths;
+        const nonImagePaths = paths.filter((p) => !isImage(p));
+        if (nonImagePaths.length > 0) {
+          await openTracks(nonImagePaths);
+        } else {
+          const imagePath = paths.find(isImage);
+          if (imagePath) await handleArtDropRef.current(imagePath);
+        }
+      },
+    );
+    return () => {
+      unlisten.then((f) => f());
+    };
   }, [openTracks]);
 
   // Native menu bar events emitted from Rust via app.emit().
@@ -609,15 +715,24 @@ export default function App() {
         setSelectedIds(new Set());
       }),
       listen("menu-apply-rules", () => handleApplyRulesRef.current()),
-      listen("menu-edit-rules", () => handleEditRulesRef.current()),
       listen<boolean>("context-menu-registered", (e) => {
-        setNotice(e.payload ? "Context menu registered." : "Failed to register context menu.");
+        setNotice(
+          e.payload
+            ? "Context menu registered."
+            : "Failed to register context menu.",
+        );
       }),
       listen<boolean>("context-menu-unregistered", (e) => {
-        setNotice(e.payload ? "Context menu unregistered." : "Failed to unregister context menu.");
+        setNotice(
+          e.payload
+            ? "Context menu unregistered."
+            : "Failed to unregister context menu.",
+        );
       }),
     ]);
-    return () => { unlisteners.then((fns) => fns.forEach((f) => f())); };
+    return () => {
+      unlisteners.then((fns) => fns.forEach((f) => f()));
+    };
   }, []);
 
   // Open the folder passed as a CLI argument (e.g. from Windows context menu).
@@ -635,8 +750,12 @@ export default function App() {
 
   // Compute art state for the editor from selected rows.
   const artUrls = selRows.map((r) => r.artUrl);
-  const sharedArtUrl = artUrls.length > 0 && artUrls.every((u) => u === artUrls[0]) ? artUrls[0] : null;
-  const mixedArt = artUrls.length > 1 && !artUrls.every((u) => u === artUrls[0]);
+  const sharedArtUrl =
+    artUrls.length > 0 && artUrls.every((u) => u === artUrls[0])
+      ? artUrls[0]
+      : null;
+  const mixedArt =
+    artUrls.length > 1 && !artUrls.every((u) => u === artUrls[0]);
 
   return (
     <div className="win" data-theme="dark" data-density="balanced">
@@ -672,7 +791,7 @@ export default function App() {
             className="tbtn"
             disabled={rows.length === 0}
             onClick={handleApplyRules}
-            title="Apply your rules.json transforms to every loaded file (then Save)"
+            title={`Apply your rules.json transforms to every loaded file (then Save)${rulesPath ? `\n\nRules file: ${rulesPath}` : ""}`}
           >
             <Icon d={ICONS.wand} />
             <span>Apply Rules</span>
@@ -682,7 +801,9 @@ export default function App() {
         <div className="toolbar__group">
           <div className="rename-bar">
             <span className="rename-bar__label">Rename:</span>
-            <div className={`rename-bar__input-wrap${renamePattern ? " rename-bar__input-wrap--active" : ""}`}>
+            <div
+              className={`rename-bar__input-wrap${renamePattern ? " rename-bar__input-wrap--active" : ""}`}
+            >
               <input
                 className="rename-bar__input"
                 placeholder="{artist} – {track_number} – {title}"
@@ -691,7 +812,10 @@ export default function App() {
                 onChange={(e) => setRenamePattern(e.target.value)}
               />
               {renamePattern && (
-                <button className="searchbox__clear" onClick={() => setRenamePattern("")}>
+                <button
+                  className="searchbox__clear"
+                  onClick={() => setRenamePattern("")}
+                >
                   <Icon d={ICONS.x} size={12} />
                 </button>
               )}
@@ -699,7 +823,7 @@ export default function App() {
             <button
               className="tbtn"
               disabled={!renamePattern.trim() || rows.length === 0}
-              onClick={handleRenameOnly}
+              onClick={() => handleRenameOnly()}
               title="Rename all loaded files now using this pattern (no tag changes)"
             >
               <Icon d={ICONS.arrowRight} />
@@ -716,7 +840,10 @@ export default function App() {
               onChange={(e) => setSearch(e.target.value)}
             />
             {search && (
-              <button className="searchbox__clear" onClick={() => setSearch("")}>
+              <button
+                className="searchbox__clear"
+                onClick={() => setSearch("")}
+              >
                 <Icon d={ICONS.x} size={12} />
               </button>
             )}
@@ -726,10 +853,16 @@ export default function App() {
         <div className="toolbar__group">
           <button
             className="tbtn"
-            onClick={() => setMetadataSide((s) => (s === "right" ? "left" : "right"))}
+            onClick={() =>
+              setMetadataSide((s) => (s === "right" ? "left" : "right"))
+            }
             title={`Move metadata pane to the ${metadataSide === "right" ? "left" : "right"}`}
           >
-            <Icon d={metadataSide === "right" ? ICONS.layoutRight : ICONS.layoutLeft} />
+            <Icon
+              d={
+                metadataSide === "right" ? ICONS.layoutRight : ICONS.layoutLeft
+              }
+            />
           </button>
         </div>
       </div>
@@ -742,7 +875,13 @@ export default function App() {
       >
         {(() => {
           const listPanel = (
-            <ResizablePanel key="list" id="list" defaultSize={68} minSize={30} className="pane pane--list">
+            <ResizablePanel
+              key="list"
+              id="list"
+              defaultSize={68}
+              minSize={30}
+              className="pane pane--list"
+            >
               <FilesPane
                 rows={displayed}
                 selectedIds={selectedIds}
@@ -750,13 +889,21 @@ export default function App() {
                 search={search}
                 totalCount={rows.length}
                 scrollToId={scrollToId}
+                renamePattern={renamePattern}
                 onSort={(key, dir) => setSort({ key, dir })}
                 onSelect={handleSelect}
+                onRenameSelected={handleRenameOnly}
               />
             </ResizablePanel>
           );
           const editorPanel = (
-            <ResizablePanel key="editor" id="editor" defaultSize={32} minSize={20} className="pane pane--editor">
+            <ResizablePanel
+              key="editor"
+              id="editor"
+              defaultSize={32}
+              minSize={20}
+              className="pane pane--editor"
+            >
               <TagEditor
                 selRows={selRows}
                 artUrl={sharedArtUrl ?? null}
@@ -768,7 +915,9 @@ export default function App() {
               />
             </ResizablePanel>
           );
-          const handle = <ResizableHandle key="handle" className="pane-handle" />;
+          const handle = (
+            <ResizableHandle key="handle" className="pane-handle" />
+          );
           return metadataSide === "left"
             ? [editorPanel, handle, listPanel]
             : [listPanel, handle, editorPanel];
@@ -791,7 +940,9 @@ export default function App() {
           <>
             <span>{selectedIds.size} files selected</span>
             <span className="sb-sep" />
-            <span className="dim">{formatBytes(selRows.reduce((s, r) => s + r.size, 0))}</span>
+            <span className="dim">
+              {formatBytes(selRows.reduce((s, r) => s + r.size, 0))}
+            </span>
           </>
         )}
         <div style={{ flex: 1 }} />
@@ -805,7 +956,11 @@ export default function App() {
           <>
             <span className="dim">→</span>
             <span className="sb-rename">
-              {applyRenamePattern(renamePattern, selRows[0].tags, selRows[0].path)}
+              {applyRenamePattern(
+                renamePattern,
+                selRows[0].tags,
+                selRows[0].path,
+              )}
             </span>
             <span className="sb-sep" />
           </>

@@ -664,3 +664,29 @@ textarea.tf-input {
   background: var(--border);
   background-clip: content-box;
 }
+
+/* ——— context menu ——— */
+.ctx-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 160px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: 0 4px 16px oklch(0 0 0 / 0.35);
+  padding: 3px;
+}
+.ctx-menu__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: calc(var(--r) - 2px);
+  font-size: var(--fs);
+  color: var(--text-0);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.ctx-menu__item:hover:not(:disabled) { background: var(--sel-bg); }
+.ctx-menu__item:disabled { color: var(--text-3); cursor: default; }

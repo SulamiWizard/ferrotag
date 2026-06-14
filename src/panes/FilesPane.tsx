@@ -9,8 +9,16 @@ interface FilesPaneProps {
   search: string;
   totalCount: number;
   scrollToId?: string | null;
+  renamePattern: string;
   onSort: (key: SortKey, dir: SortDir) => void;
   onSelect: (ids: Set<string>) => void;
+  onRenameSelected: (ids: Set<string>) => void;
+}
+
+interface CtxMenu {
+  x: number;
+  y: number;
+  ids: Set<string>;
 }
 
 // Each column has a default pixel width. Columns are user-resizable (except the
@@ -24,14 +32,28 @@ const COLUMNS: {
   sortKey?: SortKey;
   noResize?: boolean;
 }[] = [
-  { key: "_status", label: "",       w: 26,  noResize: true },
-  { key: "trackNo", label: "#",      w: 42,  mono: true, align: "right", sortKey: "trackNo" },
-  { key: "title",   label: "Title",  w: 280,                              sortKey: "title" },
-  { key: "artist",  label: "Artist", w: 180,                              sortKey: "artist" },
-  { key: "album",   label: "Album",  w: 200,                              sortKey: "album" },
-  { key: "genre",   label: "Genre",  w: 130,                              sortKey: "genre" },
-  { key: "year",    label: "Year",   w: 56,  mono: true, align: "right",  sortKey: "year" },
-  { key: "fmt",     label: "Type",   w: 60,  mono: true,                  sortKey: "fmt" },
+  { key: "_status", label: "", w: 26, noResize: true },
+  {
+    key: "trackNo",
+    label: "#",
+    w: 42,
+    mono: true,
+    align: "right",
+    sortKey: "trackNo",
+  },
+  { key: "title", label: "Title", w: 280, sortKey: "title" },
+  { key: "artist", label: "Artist", w: 180, sortKey: "artist" },
+  { key: "album", label: "Album", w: 200, sortKey: "album" },
+  { key: "genre", label: "Genre", w: 130, sortKey: "genre" },
+  {
+    key: "year",
+    label: "Year",
+    w: 56,
+    mono: true,
+    align: "right",
+    sortKey: "year",
+  },
+  { key: "fmt", label: "Type", w: 60, mono: true, sortKey: "fmt" },
 ];
 
 const MIN_COL_W = 40;
@@ -63,11 +85,14 @@ export default function FilesPane({
   search,
   totalCount,
   scrollToId,
+  renamePattern,
   onSort,
   onSelect,
+  onRenameSelected,
 }: FilesPaneProps) {
   const lastClickRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null);
 
   const [colWidths, setColWidths] = useState<ColWidths>(loadColWidths);
 
@@ -119,6 +144,26 @@ export default function FilesPane({
     onSort(key, sort.key === key && sort.dir === "asc" ? "desc" : "asc");
   }
 
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const dismiss = () => setCtxMenu(null);
+    window.addEventListener("pointerdown", dismiss);
+    window.addEventListener("keydown", (e) => e.key === "Escape" && dismiss());
+    return () => {
+      window.removeEventListener("pointerdown", dismiss);
+      window.removeEventListener("keydown", dismiss);
+    };
+  }, [ctxMenu]);
+
+  function handleRowContextMenu(e: React.MouseEvent, id: string) {
+    e.preventDefault();
+    const ids = selectedIds.has(id) ? new Set(selectedIds) : new Set([id]);
+    if (!selectedIds.has(id)) onSelect(ids);
+    // Flip left if near the right edge
+    const x = e.clientX + 160 > window.innerWidth ? e.clientX - 160 : e.clientX;
+    setCtxMenu({ x, y: e.clientY, ids });
+  }
+
   function handleRowClick(e: React.MouseEvent, idx: number, id: string) {
     const ids = rows.map((r) => r.id);
     if (e.shiftKey && lastClickRef.current != null) {
@@ -140,7 +185,16 @@ export default function FilesPane({
     return (
       <div className="filelist">
         <div className="filelist__drop">
-          <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            viewBox="0 0 24 24"
+            width="32"
+            height="32"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
           </svg>
           <span>Drop audio files or folders here, or click Open</span>
@@ -167,13 +221,18 @@ export default function FilesPane({
                 <button
                   className="selall"
                   title="Select all"
-                  onClick={(e) => { e.stopPropagation(); onSelect(new Set(rows.map((r) => r.id))); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelect(new Set(rows.map((r) => r.id)));
+                  }}
                 />
               ) : (
                 <span>{col.label}</span>
               )}
               {isActive && (
-                <span className="fl-th__arrow">{sort.dir === "asc" ? "▲" : "▼"}</span>
+                <span className="fl-th__arrow">
+                  {sort.dir === "asc" ? "▲" : "▼"}
+                </span>
               )}
               {!col.noResize && (
                 <span
@@ -188,12 +247,44 @@ export default function FilesPane({
         })}
       </div>
 
+      {/* ——— context menu ——— */}
+      {ctxMenu && (
+        <div
+          className="ctx-menu"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <button
+            className="ctx-menu__item"
+            disabled={!renamePattern.trim()}
+            title={
+              !renamePattern.trim()
+                ? "Set a rename pattern in the toolbar first"
+                : undefined
+            }
+            onClick={() => {
+              onRenameSelected(ctxMenu.ids);
+              setCtxMenu(null);
+            }}
+          >
+            Rename {ctxMenu.ids.size} file{ctxMenu.ids.size !== 1 ? "s" : ""}
+          </button>
+        </div>
+      )}
+
       {/* ——— virtualised body ——— */}
-      <div className="filelist__body" ref={scrollRef} role="listbox" aria-multiselectable="true">
+      <div
+        className="filelist__body"
+        ref={scrollRef}
+        role="listbox"
+        aria-multiselectable="true"
+      >
         {rows.length === 0 ? (
           <div className="filelist__empty">No files match "{search}".</div>
         ) : (
-          <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+          <div
+            style={{ height: virtualizer.getTotalSize(), position: "relative" }}
+          >
             {virtualItems.map((vItem) => {
               const row = rows[vItem.index];
               const isSel = selectedIds.has(row.id);
@@ -211,6 +302,7 @@ export default function FilesPane({
                     transform: `translateY(${vItem.start}px)`,
                   }}
                   onClick={(e) => handleRowClick(e, vItem.index, row.id)}
+                  onContextMenu={(e) => handleRowContextMenu(e, row.id)}
                   role="option"
                   aria-selected={isSel}
                 >
@@ -227,7 +319,10 @@ export default function FilesPane({
                     {row.tags.trackNo || <span className="ph">—</span>}
                   </div>
                   <div className="fl-td fl-td--title">
-                    <span className={untagged ? "muted-italic" : ""} style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <span
+                      className={untagged ? "muted-italic" : ""}
+                      style={{ overflow: "hidden", textOverflow: "ellipsis" }}
+                    >
                       {row.tags.title || row.file}
                     </span>
                   </div>
@@ -244,7 +339,9 @@ export default function FilesPane({
                     {row.tags.year || <span className="ph">—</span>}
                   </div>
                   <div className="fl-td mono">
-                    <span className={`fmt-chip fmt-${row.fmt.toLowerCase()}`}>{row.fmt}</span>
+                    <span className={`fmt-chip fmt-${row.fmt.toLowerCase()}`}>
+                      {row.fmt}
+                    </span>
                   </div>
                 </div>
               );

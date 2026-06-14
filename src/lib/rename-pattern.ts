@@ -7,16 +7,16 @@ const ILLEGAL_CHARS = /[/\\:*?"<>|]/g;
 const MULTI_VALUE_TOKENS = new Set(["artist", "album_artist"]);
 
 const TOKENS: Record<string, (tags: EditableTags) => string> = {
-  title:        (t) => t.title,
-  artist:       (t) => t.artist,
-  album:        (t) => t.album,
+  title: (t) => t.title,
+  artist: (t) => t.artist,
+  album: (t) => t.album,
   album_artist: (t) => t.albumArtist,
   track_number: (t) => t.trackNo,
-  disc_number:  (t) => t.discNo,
-  year:         (t) => t.year,
-  genre:        (t) => t.genre,
-  composer:     (t) => t.composer,
-  bpm:          (t) => t.bpm,
+  disc_number: (t) => t.discNo,
+  year: (t) => t.year,
+  genre: (t) => t.genre,
+  composer: (t) => t.composer,
+  bpm: (t) => t.bpm,
 };
 
 export const RENAME_TOKEN_LIST = Object.keys(TOKENS).map((k) => `{${k}}`);
@@ -31,20 +31,23 @@ export function applyRenamePattern(
 
   // {token:N} — for multi-value tokens (artist, album_artist) N is a 1-based index;
   // for numeric tokens (track_number, disc_number) N is a zero-pad width.
-  let stem = pattern.replace(/\{(\w+)(?::(\d+))?\}/g, (_, key: string, numStr: string | undefined) => {
-    const fn_ = TOKENS[key];
-    if (!fn_) return `{${key}}`;
-    const value = fn_(tags);
-    const num = numStr !== undefined ? parseInt(numStr, 10) : undefined;
-    if (MULTI_VALUE_TOKENS.has(key)) {
-      const idx = (num ?? 1) - 1;
-      return value.split("; ")[idx]?.trim() ?? "";
-    }
-    if (num !== undefined && /^\d+$/.test(value)) {
-      return value.padStart(num, "0");
-    }
-    return value;
-  });
+  let stem = pattern.replace(
+    /\{(\w+)(?::(\d+))?\}/g,
+    (_, key: string, numStr: string | undefined) => {
+      const fn_ = TOKENS[key];
+      if (!fn_) return `{${key}}`;
+      const value = fn_(tags);
+      const num = numStr !== undefined ? parseInt(numStr, 10) : undefined;
+      if (MULTI_VALUE_TOKENS.has(key)) {
+        const idx = (num ?? 1) - 1;
+        return value.split("; ")[idx]?.trim() ?? "";
+      }
+      if (num !== undefined && /^\d+$/.test(value)) {
+        return value.padStart(num, "0");
+      }
+      return value;
+    },
+  );
 
   stem = stem.replace(ILLEGAL_CHARS, "");
   stem = stem.replace(/\s+/g, " ").trim();

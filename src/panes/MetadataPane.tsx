@@ -61,7 +61,11 @@ function Field({
           </button>
         )}
       </div>
-      {field.multiline ? <textarea {...props} rows={2} /> : <input {...props} />}
+      {field.multiline ? (
+        <textarea {...props} rows={2} />
+      ) : (
+        <input {...props} />
+      )}
     </label>
   );
 }
@@ -83,7 +87,11 @@ function ExpandGroup({
         className="tf-expand"
         onClick={() => setOpen((o) => !o)}
       >
-        <span className={`tf-expand__arrow${open ? " tf-expand__arrow--open" : ""}`}>▶</span>
+        <span
+          className={`tf-expand__arrow${open ? " tf-expand__arrow--open" : ""}`}
+        >
+          ▶
+        </span>
         {label}
       </button>
       {open && <div className="tf-sub">{children}</div>}
@@ -111,7 +119,11 @@ function AlbumArt({
   const [drag, setDrag] = useState(false);
   const [menu, setMenu] = useState(false);
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
-  const [artInfo, setArtInfo] = useState<{ w: number; h: number; bytes: number } | null>(null);
+  const [artInfo, setArtInfo] = useState<{
+    w: number;
+    h: number;
+    bytes: number;
+  } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -124,14 +136,18 @@ function AlbumArt({
   }, [menu]);
 
   useEffect(() => {
-    if (!artUrl || mixedArt) { setArtInfo(null); return; }
+    if (!artUrl || mixedArt) {
+      setArtInfo(null);
+      return;
+    }
     // Byte size: strip the data URI prefix, decode base64 length to raw bytes
     const b64 = artUrl.split(",")[1] ?? "";
-    const padding = (b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0);
+    const padding = b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0;
     const bytes = Math.floor(b64.length * 0.75) - padding;
     // Resolve pixel dimensions by loading into a temporary Image
     const img = new Image();
-    img.onload = () => setArtInfo({ w: img.naturalWidth, h: img.naturalHeight, bytes });
+    img.onload = () =>
+      setArtInfo({ w: img.naturalWidth, h: img.naturalHeight, bytes });
     img.src = artUrl;
   }, [artUrl, mixedArt]);
 
@@ -149,7 +165,10 @@ function AlbumArt({
           setMenuPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
           setMenu(true);
         }}
-        onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDrag(true);
+        }}
         onDragLeave={() => setDrag(false)}
         onDrop={(e) => {
           e.preventDefault();
@@ -170,16 +189,38 @@ function AlbumArt({
           </>
         ) : mixedArt ? (
           <div className="art__mixed">
-            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              width="28"
+              height="28"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
               <rect x="3" y="3" width="18" height="18" rx="2" />
               <circle cx="9" cy="9" r="1.8" fill="currentColor" />
               <path d="M5 18l5-5 4 4 2-2 3 3" />
             </svg>
-            <span className="mono" style={{ fontSize: "11px" }}>multiple covers</span>
+            <span className="mono" style={{ fontSize: "11px" }}>
+              multiple covers
+            </span>
           </div>
         ) : (
           <div className="art__drop">
-            <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              width="34"
+              height="34"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
               <rect x="3" y="3" width="18" height="18" rx="2" />
               <circle cx="9" cy="9" r="1.8" fill="currentColor" />
               <path d="M5 18l5-5 4 4 2-2 3 3" />
@@ -193,10 +234,10 @@ function AlbumArt({
         {hasArt && artInfo
           ? `${artInfo.w} × ${artInfo.h} · ${formatArtBytes(artInfo.bytes)}`
           : hasArt
-          ? "embedded"
-          : mixedArt
-          ? "multiple covers"
-          : "no artwork"}
+            ? "embedded"
+            : mixedArt
+              ? "multiple covers"
+              : "no artwork"}
       </div>
       {menu && (
         <div className="art-menu" style={{ top: menuPos.y, left: menuPos.x }}>
@@ -204,7 +245,10 @@ function AlbumArt({
             type="button"
             className="art-menu__item"
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => { onArtExtract(); setMenu(false); }}
+            onClick={() => {
+              onArtExtract();
+              setMenu(false);
+            }}
           >
             Extract image
           </button>
@@ -212,7 +256,10 @@ function AlbumArt({
             type="button"
             className="art-menu__item"
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => { onArtClick(artUrl); setMenu(false); }}
+            onClick={() => {
+              onArtClick(artUrl);
+              setMenu(false);
+            }}
           >
             Change image
           </button>
@@ -220,7 +267,10 @@ function AlbumArt({
             type="button"
             className="art-menu__item art-menu__item--danger"
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => { onArtRemove(); setMenu(false); }}
+            onClick={() => {
+              onArtRemove();
+              setMenu(false);
+            }}
           >
             Remove art
           </button>
@@ -253,8 +303,11 @@ export default function TagEditor({
 
   const batch = selRows.length > 1;
 
-  const f = (key: keyof EditableTags, label: string, opts?: Partial<TagFieldDef>): TagFieldDef =>
-    ({ key, label, ...opts });
+  const f = (
+    key: keyof EditableTags,
+    label: string,
+    opts?: Partial<TagFieldDef>,
+  ): TagFieldDef => ({ key, label, ...opts });
 
   return (
     <div className="editor">
@@ -272,7 +325,9 @@ export default function TagEditor({
             </span>
           )}
         </div>
-        {batch && <div className="editor__sub mono">edits apply to all selected</div>}
+        {batch && (
+          <div className="editor__sub mono">edits apply to all selected</div>
+        )}
       </div>
 
       {/* scrollable body */}
@@ -293,28 +348,93 @@ export default function TagEditor({
         <div className="tf-section">
           <div className="tf-section__label">Core</div>
           <div className="tf-grid">
-            <Field field={f("title",       "Title")}        sel={selRows} onChange={onEdit} />
-            <Field field={f("artist",      "Artist")}       sel={selRows} onChange={onEdit} />
-            <Field field={f("album",       "Album")}        sel={selRows} onChange={onEdit} />
-            <Field field={f("albumArtist", "Album Artist")} sel={selRows} onChange={onEdit} />
-            <Field field={f("trackNo", "Track #", { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
-            <Field field={f("year",    "Year",    { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
-            <Field field={f("genre", "Genre")} sel={selRows} onChange={onEdit} />
+            <Field
+              field={f("title", "Title")}
+              sel={selRows}
+              onChange={onEdit}
+            />
+            <Field
+              field={f("artist", "Artist")}
+              sel={selRows}
+              onChange={onEdit}
+            />
+            <Field
+              field={f("album", "Album")}
+              sel={selRows}
+              onChange={onEdit}
+            />
+            <Field
+              field={f("albumArtist", "Album Artist")}
+              sel={selRows}
+              onChange={onEdit}
+            />
+            <Field
+              field={f("trackNo", "Track #", { narrow: true, mono: true })}
+              sel={selRows}
+              onChange={onEdit}
+            />
+            <Field
+              field={f("year", "Year", { narrow: true, mono: true })}
+              sel={selRows}
+              onChange={onEdit}
+            />
+            <Field
+              field={f("genre", "Genre")}
+              sel={selRows}
+              onChange={onEdit}
+            />
 
             <ExpandGroup label="More date fields">
               <div className="tf-grid">
-                <Field field={f("yearLegacy",          "Year (TYER)",           { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
-                <Field field={f("releaseDate",         "Release Date",          { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
-                <Field field={f("originalReleaseDate", "Original Release Date", { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
+                <Field
+                  field={f("yearLegacy", "Year (TYER)", {
+                    narrow: true,
+                    mono: true,
+                  })}
+                  sel={selRows}
+                  onChange={onEdit}
+                />
+                <Field
+                  field={f("releaseDate", "Release Date", {
+                    narrow: true,
+                    mono: true,
+                  })}
+                  sel={selRows}
+                  onChange={onEdit}
+                />
+                <Field
+                  field={f("originalReleaseDate", "Original Release Date", {
+                    narrow: true,
+                    mono: true,
+                  })}
+                  sel={selRows}
+                  onChange={onEdit}
+                />
               </div>
             </ExpandGroup>
 
             <ExpandGroup label="More credits">
               <div className="tf-grid">
-                <Field field={f("lyricist",  "Lyricist")}  sel={selRows} onChange={onEdit} />
-                <Field field={f("conductor", "Conductor")} sel={selRows} onChange={onEdit} />
-                <Field field={f("arranger",  "Arranger")}  sel={selRows} onChange={onEdit} />
-                <Field field={f("remixer",   "Remixer")}   sel={selRows} onChange={onEdit} />
+                <Field
+                  field={f("lyricist", "Lyricist")}
+                  sel={selRows}
+                  onChange={onEdit}
+                />
+                <Field
+                  field={f("conductor", "Conductor")}
+                  sel={selRows}
+                  onChange={onEdit}
+                />
+                <Field
+                  field={f("arranger", "Arranger")}
+                  sel={selRows}
+                  onChange={onEdit}
+                />
+                <Field
+                  field={f("remixer", "Remixer")}
+                  sel={selRows}
+                  onChange={onEdit}
+                />
               </div>
             </ExpandGroup>
           </div>
@@ -324,13 +444,33 @@ export default function TagEditor({
         <div className="tf-section">
           <div className="tf-section__label">Extended</div>
           <div className="tf-grid">
-            <Field field={f("discNo",    "Disc #",   { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
-            <Field field={f("bpm",       "BPM",      { narrow: true, mono: true })} sel={selRows} onChange={onEdit} />
-            <Field field={f("composer",  "Composer")}                               sel={selRows} onChange={onEdit} />
-            <Field field={f("comment",   "Comment",  { multiline: true })}          sel={selRows} onChange={onEdit} />
+            <Field
+              field={f("discNo", "Disc #", { narrow: true, mono: true })}
+              sel={selRows}
+              onChange={onEdit}
+            />
+            <Field
+              field={f("bpm", "BPM", { narrow: true, mono: true })}
+              sel={selRows}
+              onChange={onEdit}
+            />
+            <Field
+              field={f("composer", "Composer")}
+              sel={selRows}
+              onChange={onEdit}
+            />
+            <Field
+              field={f("comment", "Comment", { multiline: true })}
+              sel={selRows}
+              onChange={onEdit}
+            />
 
             <ExpandGroup label="More comment fields">
-              <Field field={f("description", "Description", { multiline: true })} sel={selRows} onChange={onEdit} />
+              <Field
+                field={f("description", "Description", { multiline: true })}
+                sel={selRows}
+                onChange={onEdit}
+              />
             </ExpandGroup>
           </div>
         </div>
@@ -341,10 +481,26 @@ export default function TagEditor({
           <div className="tf-grid">
             <ExpandGroup label="Sort fields">
               <div className="tf-grid">
-                <Field field={f("sortTitle",       "Sort Title")}        sel={selRows} onChange={onEdit} />
-                <Field field={f("sortArtist",      "Sort Artist")}       sel={selRows} onChange={onEdit} />
-                <Field field={f("sortAlbum",       "Sort Album")}        sel={selRows} onChange={onEdit} />
-                <Field field={f("sortAlbumArtist", "Sort Album Artist")} sel={selRows} onChange={onEdit} />
+                <Field
+                  field={f("sortTitle", "Sort Title")}
+                  sel={selRows}
+                  onChange={onEdit}
+                />
+                <Field
+                  field={f("sortArtist", "Sort Artist")}
+                  sel={selRows}
+                  onChange={onEdit}
+                />
+                <Field
+                  field={f("sortAlbum", "Sort Album")}
+                  sel={selRows}
+                  onChange={onEdit}
+                />
+                <Field
+                  field={f("sortAlbumArtist", "Sort Album Artist")}
+                  sel={selRows}
+                  onChange={onEdit}
+                />
               </div>
             </ExpandGroup>
           </div>
@@ -356,8 +512,16 @@ export default function TagEditor({
           <div className="tf-grid">
             <ExpandGroup label="Technical fields">
               <div className="tf-grid">
-                <Field field={f("copyright", "Copyright")} sel={selRows} onChange={onEdit} />
-                <Field field={f("encodedBy", "Encoded By")} sel={selRows} onChange={onEdit} />
+                <Field
+                  field={f("copyright", "Copyright")}
+                  sel={selRows}
+                  onChange={onEdit}
+                />
+                <Field
+                  field={f("encodedBy", "Encoded By")}
+                  sel={selRows}
+                  onChange={onEdit}
+                />
               </div>
             </ExpandGroup>
           </div>
