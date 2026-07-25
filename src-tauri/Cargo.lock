@@ -1006,7 +1006,7 @@ dependencies = [
 
 [[package]]
 name = "ferrotag"
-version = "1.2.5"
+version = "1.2.6"
 dependencies = [
  "base64 0.23.0",
  "jwalk",
