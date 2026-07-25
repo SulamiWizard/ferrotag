@@ -1,4 +1,5 @@
-use crate::metadata::track::{read_track, TrackMetadata};
+use crate::handlers::get_handler;
+use crate::metadata::track::TrackMetadata;
 use jwalk::WalkDir;
 use rayon::prelude::*;
 use std::path::Path;
@@ -42,9 +43,16 @@ pub async fn load_tracks(on_batch: Channel<Vec<TrackMetadata>>, paths: Vec<Strin
 
         std::thread::spawn(move || {
             candidates.par_iter().for_each_with(tx, |tx, path| {
-                if let Some(track) = read_track(path) {
+                // TODO: change to handler instead of track.rs read_track
+                let handler = get_handler(path);
+
+                if let Some(track) = handler.read_metadata(path) {
                     let _ = tx.send(track);
                 }
+
+                // if let Some(track) = read_track(path) {
+                //     let _ = tx.send(track);
+                // }
             });
             // dropping tx closes the channel, ending the rx loop below
         });

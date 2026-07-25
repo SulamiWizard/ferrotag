@@ -68,6 +68,9 @@ pub fn read_track(path: &str) -> Option<TrackMetadata> {
     // TRACKNUMBER="01" in Vorbis comments). However, ID3v2 date frames (TDRC etc.)
     // are not parsed in this mode, so for ID3v2 files we do a second read with
     // default options just to resolve those fields.
+
+    // TODO: Use handlers instead of just this
+
     let tagged = Probe::open(path)
         .ok()?
         .options(ParseOptions::new().implicit_conversions(false))

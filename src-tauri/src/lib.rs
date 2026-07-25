@@ -3,6 +3,7 @@ use tauri::menu::{MenuBuilder, SubmenuBuilder};
 use tauri::Emitter;
 
 mod commands;
+mod handlers;
 mod metadata;
 
 // Holds the folder path passed as a CLI argument (e.g. from the Windows
