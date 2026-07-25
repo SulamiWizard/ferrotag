@@ -1,104 +1,27 @@
-use std::collections::HashMap;
+use super::FileHandler;
+use crate::metadata::track::TrackMetadata;
 use lofty::config::ParseOptions;
-use lofty::file::TaggedFile;
 use lofty::prelude::*;
 use lofty::probe::Probe;
 use lofty::tag::TagType;
 use serde_json::Value;
-use crate::metadata::track::TrackMetadata;
-use super::FileHandler;
+use std::collections::HashMap;
 
 pub struct DefaultHandler;
 
 impl FileHandler for DefaultHandler {
     fn read_metadata(&self, path: &str) -> Option<TrackMetadata> {
-        let tagged = Probe::open(path)
-            .ok()?
-            .options(ParseOptions::new().implicit_conversions(false))
-            .read()
-            .ok()?;
-
-        let date_tagged: Option<TaggedFile> = if tagged.primary_tag_type() == TagType::Id3v2 {
-            Probe::open(path).ok().and_then(|p| p.read().ok())
-        } else {
-            None
-        };
-
-        let tag = tagged.primary_tag();
-        let date_tag = date_tagged.as_ref().and_then(|tf| tf.primary_tag()).or(tag);
-
-        Some(TrackMetadata {
-            path: path.to_string(),
-            size_bytes: std::fs::metadata(path).map(|m| m.len()).unwrap_or(0),
-            title: tag.and_then(|t| t.title().map(|s| s.to_string())),
-            artists: tag
-                .map(|t| {
-                    t.get_strings(ItemKey::TrackArtist)
-                        .map(|s| s.to_string())
-                        .collect()
-                })
-                .unwrap_or_default(),
-            album: tag.and_then(|t| t.album().map(|s| s.to_string())),
-            album_artists: tag
-                .map(|t| {
-                    t.get_strings(ItemKey::AlbumArtist)
-                        .map(|s| s.to_string())
-                        .collect()
-                })
-                .unwrap_or_default(),
-            year: date_tag.and_then(|t| t.get_string(ItemKey::Year).map(|s| s.to_string())),
-            release_date: date_tag
-                .and_then(|t| t.get_string(ItemKey::ReleaseDate).map(|s| s.to_string())),
-            recording_date: date_tag
-                .and_then(|t| t.get_string(ItemKey::RecordingDate).map(|s| s.to_string())),
-            original_release_date: date_tag.and_then(|t| {
-                t.get_string(ItemKey::OriginalReleaseDate)
-                    .map(|s| s.to_string())
-            }),
-            track_number: tag
-                .and_then(|t| t.get_string(ItemKey::TrackNumber).map(|s| s.to_string())),
-            disc_number: tag
-                .and_then(|t| t.get_string(ItemKey::DiscNumber).map(|s| s.to_string())),
-            genre: tag.and_then(|t| t.genre().map(|s| s.to_string())),
-            composer: tag.and_then(|t| t.get_string(ItemKey::Composer).map(|s| s.to_string())),
-            bpm: tag.and_then(|t| t.get_string(ItemKey::Bpm).map(|s| s.to_string())),
-            comment: tag.and_then(|t| t.get_string(ItemKey::Comment).map(|s| s.to_string())),
-            description: tag
-                .and_then(|t| t.get_string(ItemKey::Description).map(|s| s.to_string())),
-            lyricist: tag.and_then(|t| t.get_string(ItemKey::Lyricist).map(|s| s.to_string())),
-            conductor: tag
-                .and_then(|t| t.get_string(ItemKey::Conductor).map(|s| s.to_string())),
-            arranger: tag.and_then(|t| t.get_string(ItemKey::Arranger).map(|s| s.to_string())),
-            remixer: tag.and_then(|t| t.get_string(ItemKey::Remixer).map(|s| s.to_string())),
-            copyright: tag.and_then(|t| {
-                t.get_string(ItemKey::CopyrightMessage)
-                    .map(|s| s.to_string())
-            }),
-            encoded_by: tag
-                .and_then(|t| t.get_string(ItemKey::EncodedBy).map(|s| s.to_string())),
-            sort_title: tag.and_then(|t| {
-                t.get_string(ItemKey::TrackTitleSortOrder)
-                    .map(|s| s.to_string())
-            }),
-            sort_artist: tag.and_then(|t| {
-                t.get_string(ItemKey::TrackArtistSortOrder)
-                    .map(|s| s.to_string())
-            }),
-            sort_album: tag.and_then(|t| {
-                t.get_string(ItemKey::AlbumTitleSortOrder)
-                    .map(|s| s.to_string())
-            }),
-            sort_album_artist: tag.and_then(|t| {
-                t.get_string(ItemKey::AlbumArtistSortOrder)
-                    .map(|s| s.to_string())
-            }),
-        })
+        super::read_metadata(path)
     }
 
     fn save_metadata(&self, path: &str, changes: &HashMap<String, Value>) -> Result<(), String> {
         let mut tagged_file = Probe::open(path)
             .map_err(|e| e.to_string())?
-            .options(ParseOptions::new().implicit_conversions(false))
+            .options(
+                ParseOptions::new()
+                    .implicit_conversions(false)
+                    .read_properties(false),
+            )
             .read()
             .map_err(|e| e.to_string())?;
 
@@ -107,21 +30,9 @@ impl FileHandler for DefaultHandler {
             tagged_file.insert_tag(lofty::tag::Tag::new(tag_type));
         }
 
-        let tag_type = {
-            let tag = tagged_file
-                .primary_tag_mut()
-                .ok_or("Failed to initialize tag")?;
-
-            apply_changes(tag, changes);
-
-            tag.tag_type()
-        };
-
         tagged_file
             .save_to_path(path, lofty::config::WriteOptions::default())
             .map_err(|e| e.to_string())?;
-
-        apply_id3v2_number_fix(path, tag_type, changes)?;
 
         Ok(())
     }
@@ -267,8 +178,7 @@ pub(super) fn apply_changes(tag: &mut lofty::tag::Tag, changes: &HashMap<String,
             }
             "album_artists" => {
                 if let Some(arr) = value.as_array() {
-                    let album_artists: Vec<&str> =
-                        arr.iter().filter_map(|v| v.as_str()).collect();
+                    let album_artists: Vec<&str> = arr.iter().filter_map(|v| v.as_str()).collect();
                     tag.remove_key(ItemKey::AlbumArtist);
                     match tag.tag_type() {
                         TagType::VorbisComments => {
@@ -288,68 +198,4 @@ pub(super) fn apply_changes(tag: &mut lofty::tag::Tag, changes: &HashMap<String,
             _ => {}
         }
     }
-}
-
-// Re-writes TRCK/TPOS frames verbatim via the native Id3v2Tag API to prevent
-// lofty from stripping leading zeros when it converts them to u32 internally.
-//
-// Re-reads from disk after the first save so every frame written by lofty is
-// preserved exactly — using the pre-save generic-tag snapshot risks losing
-// frames that didn't survive the generic-Tag → Id3v2Tag round-trip (e.g. TYER
-// in an ID3v2.4 file, which has no ItemKey mapping and lives only in the
-// companion tag).
-pub(super) fn apply_id3v2_number_fix(
-    path: &str,
-    tag_type: TagType,
-    changes: &HashMap<String, Value>,
-) -> Result<(), String> {
-    if tag_type != TagType::Id3v2 {
-        return Ok(());
-    }
-
-    let fixes: Vec<(&'static str, String)> =
-        [("track_number", "TRCK"), ("disc_number", "TPOS")]
-            .iter()
-            .filter_map(|(change_key, frame_id)| {
-                let v = changes.get(*change_key)?.as_str()?;
-                if v.is_empty() {
-                    None
-                } else {
-                    Some((*frame_id, v.to_string()))
-                }
-            })
-            .collect();
-
-    if fixes.is_empty() {
-        return Ok(());
-    }
-
-    use lofty::id3::v2::{Frame, FrameId, Id3v2Tag, TextInformationFrame};
-    use lofty::prelude::TagExt;
-    use lofty::TextEncoding;
-    use std::borrow::Cow;
-
-    let tagged = Probe::open(path)
-        .map_err(|e| e.to_string())?
-        .read()
-        .map_err(|e| e.to_string())?;
-    let tag = tagged
-        .primary_tag()
-        .ok_or("No tag found after save")?
-        .clone();
-    let mut id3v2 = Id3v2Tag::from(tag);
-
-    for (frame_id, value) in fixes {
-        id3v2.insert(Frame::Text(TextInformationFrame::new(
-            FrameId::Valid(Cow::Owned(frame_id.to_string())),
-            TextEncoding::UTF8,
-            value,
-        )));
-    }
-
-    id3v2
-        .save_to_path(path, lofty::config::WriteOptions::default())
-        .map_err(|e| e.to_string())?;
-
-    Ok(())
 }
